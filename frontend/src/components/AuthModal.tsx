@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import { X, User, Lock, Building2, IdCard, CheckCircle, Loader2 } from 'lucide-react'
 
-// 定義後端 API 網址
-// 建議放在 .env.local: NEXT_PUBLIC_API_URL=http://localhost:8000/api/auth
+// --- 設定區：要切換「真實 API」或「模擬測試」請改這裡 ---
+const USE_MOCK_API = true; // <--- 改成 false 就會真的打後端 API
+
+// 定義後端 API 網址 (當 USE_MOCK_API = false 時才會用到)
 const API_PORT = 8000;
 const API_BASE_URL = `http://localhost:${API_PORT}/api/auth`;
 
@@ -15,10 +17,9 @@ interface AuthModalProps {
 
 export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
   const [isRegister, setIsRegister] = useState(false)
-  const [isLoading, setIsLoading] = useState(false) // 新增：載入狀態
-  const [errorMsg, setErrorMsg] = useState('')      // 新增：錯誤訊息顯示
+  const [isLoading, setIsLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
   
-  // 表單資料
   const [formData, setFormData] = useState({
     department: '資訊管理系',
     name: '',
@@ -29,8 +30,8 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setErrorMsg('') // 清除舊錯誤
-    setIsLoading(true) // 開始轉圈圈
+    setErrorMsg('')
+    setIsLoading(true)
 
     // 1. 前端基本檢查
     if (isRegister && formData.password !== formData.confirmPassword) {
@@ -40,74 +41,90 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
     }
 
     try {
-      // 2. 決定要打哪一支 API
-      const endpoint = isRegister ? '/register' : '/login';
-      const url = `${API_BASE_URL}${endpoint}`;
+      let userData;
 
-      // 3. 準備要傳送的資料
-      // 如果是登入，只需要學號跟密碼；註冊則需要全部 (除了 confirmPassword)
-      const payload = isRegister 
-        ? { 
-            studentId: formData.studentId, 
-            password: formData.password, 
-            name: formData.name, 
-            department: formData.department 
-          }
-        : { 
-            studentId: formData.studentId, 
-            password: formData.password 
-          };
+      if (USE_MOCK_API) {
+        // ==========================================
+        // [模式 A] 模擬測試模式 (無後端時使用)
+        // ==========================================
+        console.log('正在使用模擬登入...');
+        await new Promise(resolve => setTimeout(resolve, 800)); // 假裝跑一下 Loading
 
-      // 4. 發送請求 (Fetch)
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+        // 模擬驗證：帳號密碼都不能是空的
+        if (!formData.studentId || !formData.password) {
+          throw new Error('請輸入帳號密碼');
+        }
 
-      const data = await response.json();
+        // 模擬管理者帳號
+        const isAdmin = formData.studentId === 'admin' && formData.password === 'admin123';
 
-      if (!response.ok) {
-        // 如果後端回傳錯誤 (例如 400, 401)
-        throw new Error(data.message || '操作失敗，請稍後再試');
+        userData = {
+          name: isAdmin ? '系統管理員' : (isRegister ? formData.name : '吳名式'),
+          id: formData.studentId,
+          department: isAdmin ? '教務處' : (isRegister ? formData.department : '資訊管理系'),
+          role: isAdmin ? 'admin' : 'student',
+          isLoggedIn: true
+        };
+
+      } else {
+        // ==========================================
+        // [模式 B] 真實 API 模式 (接上後端時使用)
+        // ==========================================
+        const endpoint = isRegister ? '/register' : '/login';
+        const url = `${API_BASE_URL}${endpoint}`;
+
+        const payload = isRegister 
+          ? { 
+              studentId: formData.studentId, 
+              password: formData.password, 
+              name: formData.name, 
+              department: formData.department 
+            }
+          : { 
+              studentId: formData.studentId, 
+              password: formData.password 
+            };
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || '操作失敗，請稍後再試');
+        }
+
+        // 整理後端回傳的資料
+        userData = {
+          ...data.user,
+          role: data.user.role === 0 ? 'admin' : 'student',
+          isLoggedIn: true
+        };
       }
 
-      // 5. 成功後的處理
-      // data.user 是後端回傳的使用者資料
-      // data.role 是後端回傳的身分 (admin/student) 或 0/1
-      
-      const userData = {
-        ...data.user,
-        role: data.user.role === 0 ? 'admin' : 'student', // 轉換資料庫的 0/1 為前端看的字串
-        isLoggedIn: true
-      };
-
-      // 儲存到 localStorage (選擇性，看你是否要在重整後保持登入)
-      localStorage.setItem('user', JSON.stringify(userData));
-
+      // 共通的成功處理
+      localStorage.setItem('user', JSON.stringify(userData)); // 儲存登入狀態
       onLoginSuccess(userData);
       onClose();
-      alert(isRegister ? '註冊成功！已自動登入' : '登入成功！');
+      // alert(isRegister ? '註冊成功！已自動登入' : '登入成功！'); // 不需要一直彈窗干擾
 
     } catch (err: any) {
-      console.error('API Error:', err);
-      setErrorMsg(err.message || '伺服器連線錯誤');
+      console.error('Login Error:', err);
+      setErrorMsg(err.message || '系統發生錯誤');
     } finally {
-      setIsLoading(false); // 結束轉圈圈
+      setIsLoading(false);
     }
   }
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center px-4 animate-fade-in-up">
-      {/* 背景遮罩 */}
       <div className="absolute inset-0 bg-black/30 backdrop-blur-md" onClick={onClose}></div>
       
-      {/* 卡片本體 */}
       <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
         
-        {/* Header */}
         <div className="p-6 pb-0 flex justify-between items-start">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">{isRegister ? '建立帳號' : '歡迎回來'}</h2>
@@ -120,11 +137,9 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
           </button>
         </div>
 
-        {/* Form */}
         <div className="p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             
-            {/* 錯誤訊息顯示區 */}
             {errorMsg && (
               <div className="p-3 bg-red-50 text-red-500 text-sm rounded-lg flex items-center gap-2">
                 <div className="w-1 h-1 bg-red-500 rounded-full"></div>
@@ -132,47 +147,44 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
               </div>
             )}
 
-            {/* --- 註冊專用欄位開始 --- */}
+            {/* 註冊欄位：系所 */}
             {isRegister && (
-              <>
-                {/* 1. 系所 */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 ml-1">系所</label>
-                  <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
-                    <Building2 className="w-5 h-5 text-gray-400" />
-                    <select 
-                      className="bg-transparent outline-none flex-1 text-sm font-medium text-gray-700"
-                      value={formData.department}
-                      onChange={e => setFormData({...formData, department: e.target.value})}
-                    >
-                      <option value="資訊管理系">資訊管理系</option>
-                      <option value="護理系">護理系</option>
-                      <option value="幼保系">幼保系</option>
-                      <option value="運動保健系">運動保健系</option>
-                    </select>
-                  </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 ml-1">系所</label>
+                <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
+                  <Building2 className="w-5 h-5 text-gray-400" />
+                  <select 
+                    className="bg-transparent outline-none flex-1 text-sm font-medium text-gray-700"
+                    value={formData.department}
+                    onChange={e => setFormData({...formData, department: e.target.value})}
+                  >
+                    <option value="資訊管理系">資訊管理系</option>
+                    <option value="護理系">護理系</option>
+                    {/* ... 其他系所選項保持原樣 ... */}
+                  </select>
                 </div>
-
-                {/* 2. 姓名 */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 ml-1">姓名</label>
-                  <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
-                    <User className="w-5 h-5 text-gray-400" />
-                    <input 
-                      type="text" 
-                      placeholder="請輸入真實姓名" 
-                      className="bg-transparent outline-none flex-1 text-sm font-medium"
-                      required
-                      value={formData.name}
-                      onChange={e => setFormData({...formData, name: e.target.value})}
-                    />
-                  </div>
-                </div>
-              </>
+              </div>
             )}
-            {/* --- 註冊專用欄位結束 --- */}
 
-            {/* 3. 學號 */}
+            {/* 註冊欄位：姓名 */}
+            {isRegister && (
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 ml-1">姓名</label>
+                <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
+                  <User className="w-5 h-5 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="請輸入真實姓名" 
+                    className="bg-transparent outline-none flex-1 text-sm font-medium"
+                    required
+                    value={formData.name}
+                    onChange={e => setFormData({...formData, name: e.target.value})}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* 學號 */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-gray-500 ml-1">學號 / 員工編號</label>
               <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
@@ -188,7 +200,7 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
               </div>
             </div>
 
-            {/* 4. 密碼 */}
+            {/* 密碼 */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-gray-500 ml-1">密碼</label>
               <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
@@ -204,7 +216,7 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
               </div>
             </div>
 
-            {/* 5. 確認密碼 */}
+            {/* 確認密碼 */}
             {isRegister && (
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-500 ml-1">確認密碼</label>
@@ -233,12 +245,11 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
           </form>
         </div>
 
-        {/* Footer Toggle */}
         <div className="bg-gray-50 p-4 text-center text-sm border-t border-gray-100">
           <p className="text-gray-500">
             {isRegister ? '已經有帳號了嗎？' : '還沒有帳號嗎？'}
             <button 
-              type="button" // 記得加上 type="button" 避免觸發 submit
+              type="button"
               onClick={() => {
                 setIsRegister(!isRegister)
                 setErrorMsg('')
