@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Pin, Eye, EyeOff, Trash2, Download, Lock, Plus, AlertCircle, X, Search, Loader2 } from 'lucide-react'
+import { Pin, Eye, EyeOff, Trash2, Download, Lock, Plus, AlertCircle, X, Search, Loader2, Check } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import ConfirmModal from './ConfirmModal'
 
@@ -84,7 +84,7 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
 
       // 3. 準備搜尋條件 (Payload)
       const filters = {
-        semester: '1132', // ⚠️ 注意：這裡預設搜 1141，如果你的 CSV 是其他學期請修改
+        semester: '1132', // ⚠️ 注意：確認你的學期是否正確
         days: [targetDay],
         periods: [targetPeriod],
         // 其他欄位留空
@@ -109,10 +109,8 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
         
         if (res.ok) {
           const data = await res.json();
-          // 過濾掉已經在課表中的課程，避免重複顯示
-          const existingIds = courses.map(c => c.id);
-          const filteredData = data.filter((c: any) => !existingIds.includes(c.id));
-          setRecommendations(filteredData);
+          // ✅ 修改：這裡不再過濾掉已選課程，而是全部保留，交給 UI 判斷顯示狀態
+          setRecommendations(data);
         }
       } catch (error) {
         console.error('取得推薦課程失敗', error);
@@ -122,7 +120,7 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     };
 
     fetchRecommendations();
-  }, [selectedSlot, courses]); // courses 變動時也重新過濾 (例如剛加了一堂課，推薦清單要把它拿掉)
+  }, [selectedSlot]); // 移除 courses 依賴，避免重複觸發 API，UI 狀態由 render 時判斷即可
 
 
   // --- 權限控管 ---
@@ -241,27 +239,50 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                        <p className="text-xs font-bold">正在搜尋適合的課程...</p>
                     </div>
                   ) : recommendations.length > 0 ? (
-                    recommendations.map(course => (
-                      <div key={course.id} className="bg-white p-4 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md transition group">
-                        <div className="flex justify-between items-start mb-2">
-                          <span className="font-bold text-gray-900 line-clamp-1">{course.name}</span>
-                          <span className="flex-shrink-0 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded ml-2">{course.type}</span>
-                        </div>
-                        <div className="text-xs text-gray-500 space-y-1">
-                          <p>{course.teacher} · {course.location}</p>
-                          <p>{course.time} ({course.credits}學分)</p>
-                        </div>
-                        <button 
-                          onClick={() => {
-                            onAddCourse(course) // 呼叫父層加課函式
-                            // 加課後不用關閉，可以繼續加其他課
-                          }}
-                          className="w-full mt-3 bg-black text-white text-xs font-bold py-2 rounded-lg hover:bg-gray-800 transition active:scale-95 flex items-center justify-center gap-1"
-                        >
-                          <Plus className="w-3 h-3" /> 加入此課程
-                        </button>
-                      </div>
-                    ))
+                    recommendations.map(course => {
+  // 🔥 修正：使用 String() 強制轉型，確保 '58' == 58 能判定為 true
+  // 或者使用寬鬆比對 (==) 也可以，但轉字串最保險
+  const isAdded = courses.some(c => String(c.id) === String(course.id));
+
+  return (
+    <div key={course.id} className={`p-4 rounded-2xl border shadow-sm transition group
+      ${isAdded ? 'bg-gray-50 border-gray-100' : 'bg-white border-blue-100 hover:shadow-md'}
+    `}>
+      <div className="flex justify-between items-start mb-2">
+        <span className={`font-bold line-clamp-1 ${isAdded ? 'text-gray-500' : 'text-gray-900'}`}>{course.name}</span>
+        <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded ml-2 ${isAdded ? 'bg-gray-100 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>{course.type}</span>
+      </div>
+      <div className={`text-xs space-y-1 ${isAdded ? 'text-gray-400' : 'text-gray-500'}`}>
+        <p>{course.teacher} · {course.location}</p>
+        <p>{course.time} ({course.credits}學分)</p>
+      </div>
+      
+      {/* 🔥 按鈕邏輯 */}
+      <button 
+        disabled={isAdded} // ✅ 如果已加過 (isAdded 為 true)，這裡就會變成 disabled (不能按)
+        onClick={() => {
+          // 雙重保險：如果沒加過才執行
+          if (!isAdded) onAddCourse(course)
+        }}
+        className={`w-full mt-3 text-xs font-bold py-2 rounded-lg transition flex items-center justify-center gap-1
+          ${isAdded 
+            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' // ✅ 樣式變灰
+            : 'bg-black text-white hover:bg-gray-800 active:scale-95'
+          }`}
+      >
+        {isAdded ? (
+          <>
+            <Check className="w-3 h-3" /> 已選擇該課程
+          </>
+        ) : (
+          <>
+            <Plus className="w-3 h-3" /> 加入此課程
+          </>
+        )}
+      </button>
+    </div>
+  )
+})
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-2">
                       <AlertCircle className="w-8 h-8 opacity-20" />
