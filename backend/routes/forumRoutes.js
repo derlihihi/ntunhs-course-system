@@ -9,5 +9,4 @@ router.get('/history', ForumController.getHistory);
 router.post('/post', ForumController.createPost);
 router.get('/course/:courseId', ForumController.getCoursePosts);
 
-router.post('/post', ForumController.createPost);
 module.exports = router;

@@ -78,19 +78,23 @@ export default function DiscussionModal({ course, user, onClose }: DiscussionMod
         })
       });
 
+      // 解析後端回傳的 JSON (包含錯誤訊息)
+      const data = await res.json();
+
       if (res.ok) {
         setInputText('');
-        fetchComments(); // 發送成功後，重新抓取最新留言列表
+        fetchComments(); 
       } else {
-        alert('發送失敗，請稍後再試');
+        // 🔥 這裡會顯示後端回傳的 "您的帳號已被停權..."
+        alert(data.message || '發送失敗');
       }
     } catch (error) {
       console.error('發送錯誤', error);
+      alert('連線錯誤');
     } finally {
       setIsSending(false);
     }
   }
-
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center px-4 animate-fade-in-up">
       {/* 背景遮罩 */}

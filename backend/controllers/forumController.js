@@ -22,22 +22,26 @@ class ForumController {
         try {
             const { userId, courseId, content } = req.body;
 
-            // 1. 先檢查使用者狀態
-            const user = await UserModel.findByStudentId(userId); // 注意：這裡可能要改成用 ID 查，看你 userModel 怎麼寫
-            // 如果你的 UserModel.findByStudentId 是用學號查，那這裡要改用 UserModel.findById(userId)
-            // 假設我們直接用 SQL 查狀態比較快：
+            // ============================================
+            // 🛑 這裡就是「後端警衛」！
+            // ============================================
             
-            // 這裡簡單示範邏輯：
-            // const currentUser = await UserModel.findById(userId);
-            // if (currentUser.status === 'banned') { ... }
+            // 1. 去資料庫查這個人現在的最新狀態
+            const user = await UserModel.findById(userId);
 
-            // 既然這是一個獨立功能，我們假設前端會傳入 status，或是我們在這裡查
-            // 為了嚴謹，建議後端再查一次 DB，這裡簡化示範：
-            
-            // 實際上線建議：
-            // const userStatus = await UserModel.getUserStatus(userId);
-            // if (userStatus === 'banned') return res.status(403).json({ message: '您已被停權，無法發言' });
+            if (!user) {
+                return res.status(404).json({ message: '找不到使用者' });
+            }
 
+            // 2. 檢查是否被停權
+            if (user.status === 'banned') {
+                console.log(`⛔️ 攔截到停權帳號發言嘗試: ${user.name}`);
+                return res.status(403).json({ message: '您的帳號已被停權，禁止發言！' });
+            }
+
+            // ============================================
+
+            // 3. 通過檢查，才准寫入資料庫
             await ForumModel.createPost(userId, courseId, content);
             res.status(201).json({ message: '留言成功' });
 
@@ -49,6 +53,7 @@ class ForumController {
     static async getCoursePosts(req, res) {
         try {
             const { courseId } = req.params;
+            // 呼叫 Model
             const posts = await ForumModel.getPostsByCourseId(courseId);
             res.json(posts);
         } catch (error) {
