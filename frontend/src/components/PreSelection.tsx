@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Pin, Eye, EyeOff, Trash2, Download, Lock, Plus, AlertCircle, X, Search } from 'lucide-react'
+import { Pin, Eye, EyeOff, Trash2, Download, Lock, Plus, AlertCircle, X, Search, Loader2 } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import ConfirmModal from './ConfirmModal'
 
@@ -22,27 +22,19 @@ interface PreSelectionProps {
   user: any
   onRemoveFromGlobalCart: (id: string) => void
   onOpenLogin: () => void
-  onAddCourse: (course: any) => void // 新增：讓推薦清單可以加課
+  onAddCourse: (course: any) => void
 }
 
-// 課程配色邏輯 (Apple 風格淡色系)
+// 課程配色邏輯
 const getCourseColor = (type: string, isConflict: boolean) => {
   if (isConflict) return 'bg-red-50 text-red-600 border-red-200'
   if (type === '必修') return 'bg-blue-50 text-blue-700 border-blue-100'
   if (type === '選修') return 'bg-orange-50 text-orange-700 border-orange-100'
   if (type === '通識') return 'bg-green-50 text-green-700 border-green-100'
-  // 預設灰色
   return 'bg-gray-50 text-gray-700 border-gray-100'
 }
 
-// 模擬推薦課程資料 (實際應從後端 API 撈取)
-const MOCK_RECOMMENDATIONS = [
-  { id: '9001', name: '職場英文', teacher: '王美玲', credits: 2, time: '一 / 03,04', location: 'G101', type: '通識' },
-  { id: '9002', name: '體育：羽球', teacher: '李大同', credits: 0, time: '一 / 03,04', location: '體育館', type: '必修' },
-  { id: '9003', name: '心理學導論', teacher: '陳心理', credits: 2, time: '一 / 03,04', location: 'C305', type: '選修' },
-]
-
-export default function PreSelection({ initialCourses, user, onRemoveFromGlobalCart, onOpenLogin , onAddCourse}: PreSelectionProps) {
+export default function PreSelection({ initialCourses, user, onRemoveFromGlobalCart, onOpenLogin, onAddCourse }: PreSelectionProps) {
   const [courses, setCourses] = useState<Course[]>([])
   const scheduleRef = useRef<HTMLDivElement>(null)
   
@@ -56,10 +48,15 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
   // 智能選課 Hover 狀態
   const [hoverSlot, setHoverSlot] = useState<{day: number, period: number} | null>(null)
 
-  // 新增：選中的時段 (控制左側面板切換)
+  // 選中的時段 (控制左側面板切換)
   const [selectedSlot, setSelectedSlot] = useState<{day: number, period: number} | null>(null)
+  
+  // 推薦課程清單 (從後端抓取)
+  const [recommendations, setRecommendations] = useState<Course[]>([])
+  const [isLoadingRecs, setIsLoadingRecs] = useState(false)
+
+  // 同步外部傳入的課程
   useEffect(() => {
-    // 當外部傳入的課程變動時，同步更新內部狀態，並保留原本的 pinned/hidden 屬性 (如果 id 相同)
     setCourses(prev => {
       return initialCourses.map(newCourse => {
         const exist = prev.find(p => p.id === newCourse.id)
@@ -67,6 +64,66 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
       })
     })
   }, [initialCourses])
+
+  // 🔥 關鍵邏輯：當使用者點選某個格子時，去後端抓取該時段的課程
+  useEffect(() => {
+    const fetchRecommendations = async () => {
+      if (!selectedSlot) return;
+
+      setIsLoadingRecs(true);
+      setRecommendations([]);
+
+      // 1. 轉換天數： 1 -> "週一"
+      const dayMap = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
+      const targetDay = dayMap[selectedSlot.day - 1];
+
+      // 2. 轉換節次： 3 -> "節03" (配合後端邏輯: substring(1,3))
+      // 確保格式是兩位數，例如 "03", "10"
+      const periodStr = selectedSlot.period < 10 ? `0${selectedSlot.period}` : `${selectedSlot.period}`;
+      const targetPeriod = `節${periodStr}`; 
+
+      // 3. 準備搜尋條件 (Payload)
+      const filters = {
+        semester: '1132', // ⚠️ 注意：這裡預設搜 1141，如果你的 CSV 是其他學期請修改
+        days: [targetDay],
+        periods: [targetPeriod],
+        // 其他欄位留空
+        department: '',
+        systems: [],
+        grades: [],
+        types: [],
+        categories: [],
+        teacherId: '',
+        teacherName: '',
+        courseId: '',
+        courseName: '',
+        classroomId: ''
+      };
+
+      try {
+        const res = await fetch('http://localhost:8000/api/courses/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(filters)
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          // 過濾掉已經在課表中的課程，避免重複顯示
+          const existingIds = courses.map(c => c.id);
+          const filteredData = data.filter((c: any) => !existingIds.includes(c.id));
+          setRecommendations(filteredData);
+        }
+      } catch (error) {
+        console.error('取得推薦課程失敗', error);
+      } finally {
+        setIsLoadingRecs(false);
+      }
+    };
+
+    fetchRecommendations();
+  }, [selectedSlot, courses]); // courses 變動時也重新過濾 (例如剛加了一堂課，推薦清單要把它拿掉)
+
 
   // --- 權限控管 ---
   if (!user) {
@@ -96,15 +153,13 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
   const confirmDelete = () => {
     if (deleteTarget) {
       onRemoveFromGlobalCart(deleteTarget.id)
-      // 本地狀態會在 useEffect 那邊自動同步，所以這裡不用手動 setCourses
       setDeleteTarget(null)
     }
   }
 
-  // 處理格子點擊：切換選取狀態
   const handleSlotClick = (day: number, period: number) => {
     if (selectedSlot?.day === day && selectedSlot?.period === period) {
-      setSelectedSlot(null) // 再點一次取消
+      setSelectedSlot(null)
     } else {
       setSelectedSlot({ day, period })
     }
@@ -116,15 +171,15 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     if (scheduleRef.current) {
       try {
         const canvas = await html2canvas(scheduleRef.current, {
-          scale: 2, // 提高解析度 (Retina 支援)
-          backgroundColor: '#ffffff', // 強制白底
+          scale: 2,
+          backgroundColor: '#ffffff',
           logging: false,
           useCORS: true 
         })
         const image = canvas.toDataURL("image/png")
         const link = document.createElement('a')
         link.href = image
-        link.download = `${user.name}_1132課表.png`
+        link.download = `${user.name}_1141課表.png`
         link.click()
       } catch (err) {
         alert('圖片匯出失敗，請稍後再試')
@@ -134,26 +189,24 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
 
   const parseTime = (timeStr: string) => {
     try {
+      if (!timeStr) return { day: 0, periods: [] }
       const [dayPart, periodPart] = timeStr.split('/').map(s => s.trim())
       const dayMap: { [key: string]: number } = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '日': 7 }
       const day = dayMap[dayPart] || 0
-      const periods = periodPart.split(',').map(p => parseInt(p))
+      const periods = periodPart ? periodPart.split(',').map(p => parseInt(p)) : []
       return { day, periods }
     } catch (e) {
       return { day: 0, periods: [] }
     }
   }
 
-  // 排序：Pinned 置頂
   const sortedCourses = [...courses].sort((a, b) => {
     if (a.isPinned === b.isPinned) return 0
     return a.isPinned ? -1 : 1
   })
 
-  // 動態決定顯示的天數
   const displayDays = showWeekend ? ['一', '二', '三', '四', '五', '六', '日'] : ['一', '二', '三', '四', '五']
   
-  // 節次時間對照表
   const timeMap: {[key: number]: string} = {
     1: '08:10', 2: '09:10', 3: '10:10', 4: '11:10',
     5: '12:40', 6: '13:40', 7: '14:40', 8: '15:40',
@@ -169,7 +222,7 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
           <div className="flex-1 bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden flex flex-col transition-all duration-300">
             
             {selectedSlot ? (
-              // 模式 B：智能推薦列表
+              // 模式 B：智能推薦列表 (真實資料)
               <>
                 <div className="p-4 border-b border-gray-100 bg-blue-50/50 flex justify-between items-center">
                   <div className="flex items-center gap-2">
@@ -180,35 +233,45 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                     <X className="w-4 h-4" />
                   </button>
                 </div>
+
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-blue-50/10">
-                  {MOCK_RECOMMENDATIONS.map(course => (
-                    <div key={course.id} className="bg-white p-4 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md transition group">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="font-bold text-gray-900">{course.name}</span>
-                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{course.type}</span>
-                      </div>
-                      <div className="text-xs text-gray-500 space-y-1">
-                        <p>{course.teacher} · {course.location}</p>
-                        <p>{course.time} ({course.credits}學分)</p>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          onAddCourse(course) // 加課
-                          setSelectedSlot(null) // 加完關閉
-                        }}
-                        className="w-full mt-3 bg-black text-white text-xs font-bold py-2 rounded-lg hover:bg-gray-800 transition active:scale-95 flex items-center justify-center gap-1"
-                      >
-                        <Plus className="w-3 h-3" /> 加入此課程
-                      </button>
+                  {isLoadingRecs ? (
+                    <div className="flex flex-col items-center justify-center h-full text-blue-300 space-y-2">
+                       <Loader2 className="w-8 h-8 animate-spin" />
+                       <p className="text-xs font-bold">正在搜尋適合的課程...</p>
                     </div>
-                  ))}
-                  <div className="text-center text-xs text-gray-400 mt-4">
-                    已顯示所有符合時段的課程
-                  </div>
+                  ) : recommendations.length > 0 ? (
+                    recommendations.map(course => (
+                      <div key={course.id} className="bg-white p-4 rounded-2xl border border-blue-100 shadow-sm hover:shadow-md transition group">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="font-bold text-gray-900 line-clamp-1">{course.name}</span>
+                          <span className="flex-shrink-0 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded ml-2">{course.type}</span>
+                        </div>
+                        <div className="text-xs text-gray-500 space-y-1">
+                          <p>{course.teacher} · {course.location}</p>
+                          <p>{course.time} ({course.credits}學分)</p>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            onAddCourse(course) // 呼叫父層加課函式
+                            // 加課後不用關閉，可以繼續加其他課
+                          }}
+                          className="w-full mt-3 bg-black text-white text-xs font-bold py-2 rounded-lg hover:bg-gray-800 transition active:scale-95 flex items-center justify-center gap-1"
+                        >
+                          <Plus className="w-3 h-3" /> 加入此課程
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-2">
+                      <AlertCircle className="w-8 h-8 opacity-20" />
+                      <p className="text-xs">此時段沒有其他可用課程</p>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (
-              // 模式 A：已選課程列表 (原本的)
+              // 模式 A：已選課程列表 (保持不變)
               <>
                 <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
                   <h3 className="font-bold text-gray-700">已選課程 ({courses.length})</h3>
@@ -220,8 +283,8 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-2">
                           {course.isPinned && <Pin className="w-3 h-3 text-black fill-black" />}
-                          <span className="font-bold text-gray-900">{course.name}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${course.type === '必修' ? 'text-blue-600 border-blue-100 bg-blue-50' : course.type === '選修' ? 'text-orange-600 border-orange-100 bg-orange-50' : 'text-gray-600 border-gray-100 bg-gray-50'}`}>{course.type}</span>
+                          <span className="font-bold text-gray-900 line-clamp-1">{course.name}</span>
+                          <span className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded border ${course.type === '必修' ? 'text-blue-600 border-blue-100 bg-blue-50' : course.type === '選修' ? 'text-orange-600 border-orange-100 bg-orange-50' : 'text-gray-600 border-gray-100 bg-gray-50'}`}>{course.type}</span>
                         </div>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button onClick={() => togglePin(course.id)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-black transition"><Pin className="w-4 h-4" /></button>
@@ -246,7 +309,7 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
           </div>
         </div>
 
-        {/* 右側：視覺化課表 */}
+        {/* 右側：視覺化課表 (保持不變) */}
         <div className="lg:w-2/3 flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100 gap-4">
              <div className="flex items-center gap-6">
@@ -279,23 +342,21 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                         })
                         const isConflict = activeCourses.length > 1
                         const isHovered = hoverSlot?.day === currentDay && hoverSlot?.period === period
-                        // 判斷是否被選中 (變色)
                         const isSelected = selectedSlot?.day === currentDay && selectedSlot?.period === period
 
                         return (
                           <div 
                             key={`${period}-${currentDay}`} 
-                            // 修改：點擊事件 & 背景變色邏輯
                             className={`relative border-t h-24 p-1 group transition cursor-pointer
-                              ${isSelected ? 'bg-gray-100 border-gray-300' : 'border-gray-50 hover:bg-gray-50/50'}
+                              ${isSelected ? 'bg-blue-50/30 border-blue-200' : 'border-gray-50 hover:bg-gray-50/50'}
                             `}
                             onMouseEnter={() => setHoverSlot({ day: currentDay, period })}
                             onMouseLeave={() => setHoverSlot(null)}
                             onClick={() => handleSlotClick(currentDay, period)}
                           >
-                            {/* 智能選課提示圖示 (Hover 或 Selected 時顯示) */}
+                            {/* 智能選課提示圖示 */}
                             {activeCourses.length === 0 && (isHovered || isSelected) && (
-                              <div className={`absolute inset-0 flex items-center justify-center transition animate-fade-in ${isSelected ? 'text-gray-400' : 'text-gray-200'}`}>
+                              <div className={`absolute inset-0 flex items-center justify-center transition animate-fade-in ${isSelected ? 'text-blue-200' : 'text-gray-200'}`}>
                                 <Plus className="w-6 h-6" />
                               </div>
                             )}
@@ -324,7 +385,7 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
         </div>
       </div>
 
-      {/* 刪除確認彈窗 (放在最外層) */}
+      {/* 刪除確認彈窗 */}
       {deleteTarget && (
         <ConfirmModal 
           title="移除課程"

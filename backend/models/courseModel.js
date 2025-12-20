@@ -71,13 +71,19 @@ class CourseModel {
         // 這裡示範簡單作法：只要該課程的 period_raw 有包含查詢的任一節次即可
         // 前端傳來: "節02 (09:10~10:00)" -> 我們只取 "02"
         if (filters.periods && filters.periods.length > 0) {
-            const cleanPeriods = filters.periods.map(p => p.substring(1, 3)); // 取出 "02"
-            // SQL 邏輯：檢查 period_raw (e.g. "02,03,04") 是否包含任何一個查詢的節次
-            // 這裡用 PostgreSQL 的正規表達式比較快
-            const regexPattern = cleanPeriods.join('|'); 
-            query += ` AND period_raw ~ $${counter++}`; 
-            values.push(`(${regexPattern})`);
-        }
+        // 1. 資料清洗：把 "節03 (xxx)" 變成 "3" (移除前面的0)
+        const cleanPeriods = filters.periods.map(p => {
+            const numStr = p.substring(1, 3); // 取出 "03"
+            return parseInt(numStr, 10).toString(); // 轉成數字再轉回字串: "03" -> 3 -> "3"
+        });
+
+        // 2. SQL 魔法：使用 && (Overlap) 運算子
+        // string_to_array(period_raw, ',') 會把資料庫裡的 "3,4" 變成陣列 ['3', '4']
+        // $n::text[] 會把前端傳來的 ['3', '4'] 變成 SQL 陣列
+        query += ` AND string_to_array(period_raw, ',') && $${counter++}::text[]`;
+        
+        values.push(cleanPeriods);
+    }
 
         // 教師姓名 (模糊搜尋)
         if (filters.teacherName) {

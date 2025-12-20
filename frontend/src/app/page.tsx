@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Map as MapIcon, X } from 'lucide-react'
-import Cookies from 'js-cookie' // 引入 Cookie
+// import Cookies from 'js-cookie' // 如果你還沒用到 Cookie 可以先註解
 
 // 引入拆分後的元件
 import Header from '../components/Header'
@@ -14,37 +14,127 @@ import DiscussionModal from '../components/DiscussionModal'
 import AuthModal from '../components/AuthModal'
 import ConfirmModal from '../components/ConfirmModal'
 
+// 定義後端 API 基礎路徑
+const API_BASE = 'http://localhost:8000/api';
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState('課程查詢') 
   const [isCartOpen, setIsCartOpen] = useState(false)
-  const [cartItems, setCartItems] = useState<any[]>([])
-  const [mapLocation, setMapLocation] = useState<string | null>(null)
   
+  // 這裡的 cartItems 現在會跟資料庫同步
+  const [cartItems, setCartItems] = useState<any[]>([])
+  
+  const [mapLocation, setMapLocation] = useState<string | null>(null)
   const [selectedDiscussionCourse, setSelectedDiscussionCourse] = useState<any>(null)
+  
+  // user 狀態包含 id (後端資料庫的 PK)
   const [user, setUser] = useState<any>(null) 
   const [isAuthOpen, setIsAuthOpen] = useState(false)
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
 
-  // 購物車邏輯
-  const toggleCartItem = (course: any) => {
-    const isExist = cartItems.find(item => item.id === course.id)
-    if (isExist) {
-      setCartItems(cartItems.filter(item => item.id !== course.id))
+  // ============================================
+  // 🔥 API 串接邏輯區
+  // ============================================
+
+  // 1. 讀取購物車 (Fetch Cart)
+  const fetchCart = async (userId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/cart?userId=${userId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCartItems(data); // 更新前端狀態
+      }
+    } catch (error) {
+      console.error('無法取得購物車:', error);
+    }
+  };
+
+  // 2. 當 User 登入狀態改變時，自動抓取購物車
+  useEffect(() => {
+    if (user?.id) {
+      // 如果有登入，去後端抓資料
+      fetchCart(user.id);
     } else {
-      setCartItems([...cartItems, course])
+      // 沒登入或登出，清空前端清單
+      setCartItems([]);
+    }
+  }, [user]);
+
+
+  // 3. 加入/移除購物車邏輯 (Toggle)
+  const toggleCartItem = async (course: any) => {
+    // 檢查是否登入
+    if (!user) {
+      alert('請先登入才能進行選課！');
+      setIsAuthOpen(true);
+      return;
+    }
+
+    const isExist = cartItems.find(item => item.id == course.id); // 注意: 寬鬆比對 == 避免 string/number 問題
+
+    try {
+      if (isExist) {
+        // --- 移除 (DELETE) ---
+        const res = await fetch(`${API_BASE}/cart/${course.id}?userId=${user.id}`, {
+          method: 'DELETE'
+        });
+        if (res.ok) {
+          // 重新抓取最新清單 (確保跟後端一致)
+          fetchCart(user.id);
+        }
+      } else {
+        // --- 加入 (POST) ---
+        const res = await fetch(`${API_BASE}/cart`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, courseId: course.id })
+        });
+        
+        if (res.ok) {
+          fetchCart(user.id);
+        } else {
+          alert('加入失敗，可能重複加入或系統錯誤');
+        }
+      }
+    } catch (error) {
+      console.error('操作失敗:', error);
+      alert('連線錯誤，請檢查後端 Server');
     }
   }
 
-  const removeFromCart = (courseId: string) => {
-    setCartItems(cartItems.filter(item => item.id !== courseId))
+  // 4. 單純移除 (Remove) - 給 CartDrawer 和 PreSelection 用
+  const removeFromCart = async (courseId: string) => {
+    if (!user) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/cart/${courseId}?userId=${user.id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        fetchCart(user.id); // 更新畫面
+      }
+    } catch (error) {
+      console.error('移除失敗:', error);
+    }
   }
 
+  // ============================================
+
   const handleLogoutConfirm = () => {
-    setUser(null) // 登出
-    setCartItems([]) // 清空購物車 (模擬帳號綁定)
-    setIsLogoutModalOpen(false) // 關閉彈窗
-    setActiveTab('課程查詢') // 回到首頁
+    setUser(null) // 清除 User 狀態，useEffect 會自動把 cartItems 清空
+    setIsLogoutModalOpen(false) 
+    setActiveTab('課程查詢') 
+    // 這裡也可以順便清除 localStorage
+    localStorage.removeItem('user');
   }
+
+  // 嘗試從 localStorage 恢復登入狀態 (選擇性功能)
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F5F5F7] text-gray-900 font-sans selection:bg-black selection:text-white">
@@ -74,9 +164,9 @@ export default function Home() {
            <PreSelection 
              initialCourses={cartItems} 
              onRemoveFromGlobalCart={removeFromCart} 
-             user={user} // 傳入 user
-             onOpenLogin={() => setIsAuthOpen(true)} // 傳入開啟登入函數
-             onAddCourse={toggleCartItem} // 傳入加課函數給推薦列表用
+             user={user} 
+             onOpenLogin={() => setIsAuthOpen(true)} 
+             onAddCourse={toggleCartItem} 
            />
         )}
         
@@ -109,25 +199,30 @@ export default function Home() {
                 <button onClick={() => setMapLocation(null)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-5 h-5 text-gray-500" /></button>
              </div>
              <div className="w-full h-[400px] bg-gray-100 flex items-center justify-center relative">
-                <p className="text-gray-400 font-bold">Google Maps 整合位置</p>
+                {/* 這裡之後可以串接 Google Maps API 或顯示靜態圖片 */}
+                <p className="text-gray-400 font-bold">Google Maps 整合位置 ({mapLocation})</p>
              </div>
           </div>
         </div>
       )}
 
       {selectedDiscussionCourse && (
-        <DiscussionModal course={selectedDiscussionCourse} onClose={() => setSelectedDiscussionCourse(null)} />
+        <DiscussionModal 
+           course={selectedDiscussionCourse} 
+           user={user} // 🔥 加上這行！把登入的使用者資訊傳進去
+           onClose={() => setSelectedDiscussionCourse(null)} 
+        />
       )}
 
       {isAuthOpen && (
         <AuthModal onClose={() => setIsAuthOpen(false)} onLoginSuccess={setUser} />
       )}
 
-      {/* 登出確認彈窗 (新增) */}
+      {/* 登出確認彈窗 */}
       {isLogoutModalOpen && (
         <ConfirmModal 
           title="確認登出"
-          content="登出後，您的預選課程清單將會被清空 (模擬)。確定要登出嗎？"
+          content="登出後，您的暫存狀態將會被清除，但已加入清單的課程會保留在資料庫中。"
           confirmText="登出"
           isDanger={true}
           onConfirm={handleLogoutConfirm}

@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Search, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, Trash2, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import CourseListItem from './CourseListItem'
-import { MOCK_COURSES } from '../data/mockData'
 import Cookies from 'js-cookie'
 
+// 定義 Props
 interface CourseSearchProps {
   cartItems: any[]
   onToggleCartItem: (course: any) => void
@@ -13,6 +13,7 @@ interface CourseSearchProps {
   onDiscussionClick: (course: any) => void
 }
 
+// 定義搜尋條件介面
 interface SearchFilters {
   semester: string
   department: string
@@ -29,8 +30,9 @@ interface SearchFilters {
   classroomId: string
 }
 
+// 預設篩選條件
 const DEFAULT_FILTERS: SearchFilters = {
-  semester: '1132',
+  semester: '1132', // 建議預設改成跟你的 CSV 資料一致 (1141 或 1132)
   department: '',
   systems: [],
   grades: [],
@@ -46,19 +48,19 @@ const DEFAULT_FILTERS: SearchFilters = {
 }
 
 export default function CourseSearch({ cartItems, onToggleCartItem, onLocationClick, onDiscussionClick }: CourseSearchProps) {
+  // --- State 定義 ---
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [hasSearched, setHasSearched] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [isLoading, setIsLoading] = useState(false) // 搜尋中的 Loading 狀態
 
-  // 1. 初始化 State
   const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS)
-  // 【關鍵修正】新增一個狀態，用來標記「是否已經從 Cookie 讀取過資料」
   const [isInitialized, setIsInitialized] = useState(false)
 
-  // 2. 讀取 Cookies (Component Mount 時執行一次)
+  // --- Cookie 讀取 (Mount 時執行) ---
   useEffect(() => {
     const savedFilters = Cookies.get('course_search_filters')
-    const savedHasSearched = Cookies.get('course_has_searched') // 順便讀取「是否搜尋過」的狀態
+    // const savedHasSearched = Cookies.get('course_has_searched') // 先暫時關閉自動搜尋，避免剛進來就打 API
 
     if (savedFilters) {
       try {
@@ -67,34 +69,18 @@ export default function CourseSearch({ cartItems, onToggleCartItem, onLocationCl
         console.error('Cookie 解析失敗', e)
       }
     }
-
-    // 如果之前有搜尋過，自動恢復搜尋結果 (優化體驗)
-    if (savedHasSearched === 'true') {
-      setHasSearched(true)
-      setSearchResults(MOCK_COURSES) // 實際專案這裡應該要根據 filters 重新 fetch API
-    }
-
-    // 【關鍵修正】讀取完成後，將初始化標記設為 true
     setIsInitialized(true)
   }, [])
 
-  // 3. 寫入 Cookies (當 filters 變動時執行)
+  // --- Cookie 寫入 (Filters 變動時執行) ---
   useEffect(() => {
-    // 【關鍵修正】只有在「已經初始化完成」之後，才允許寫入 Cookie
-    // 這樣可以防止元件剛掛載時，用預設值覆蓋掉 Cookie
     if (isInitialized) {
       Cookies.set('course_search_filters', JSON.stringify(filters), { expires: 7 })
     }
   }, [filters, isInitialized])
 
-  // 4. 寫入 hasSearched 到 Cookie
-  useEffect(() => {
-    if (isInitialized) {
-      Cookies.set('course_has_searched', hasSearched.toString(), { expires: 7 })
-    }
-  }, [hasSearched, isInitialized])
 
-  // --- 以下邏輯保持不變 ---
+  // --- 事件處理 Handlers ---
 
   const handleCheckboxChange = (category: keyof SearchFilters, value: string) => {
     setFilters(prev => {
@@ -114,34 +100,40 @@ export default function CourseSearch({ cartItems, onToggleCartItem, onLocationCl
     setFilters(DEFAULT_FILTERS)
     setHasSearched(false)
     setSearchResults([])
-    // 清除 Cookie
     Cookies.remove('course_search_filters')
     Cookies.remove('course_has_searched')
   }
 
-const handleSearch = async () => {
+  // 🔥 關鍵：呼叫後端 API 進行搜尋
+  const handleSearch = async () => {
     setHasSearched(true)
+    setIsLoading(true)
     
     try {
-        const response = await fetch('http://localhost:8000/api/courses/search', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(filters) // 把目前的 filters 狀態送出去
-        });
+      // 發送 POST 請求到後端
+      const response = await fetch('http://localhost:8000/api/courses/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(filters)
+      });
 
+      if (response.ok) {
         const data = await response.json();
-        
-        if (response.ok) {
-            setSearchResults(data); // 填入後端回傳的真資料
-        } else {
-            console.error('查詢失敗');
-        }
+        setSearchResults(data);
+        console.log('API 搜尋結果:', data);
+      } else {
+        console.error('搜尋失敗');
+        setSearchResults([]);
+      }
     } catch (error) {
-        console.error('連線錯誤', error);
+      console.error('連線錯誤', error);
+      alert('無法連接到後端，請確認 Server (Port 8000) 是否已啟動');
+    } finally {
+      setIsLoading(false)
     }
-}
+  }
 
   return (
     <>
@@ -160,6 +152,7 @@ const handleSearch = async () => {
                     onChange={(e) => handleInputChange('semester', e.target.value)}
                     className="w-full appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-400 font-medium transition"
                   >
+                    <option value="1141">1141</option>
                     <option value="1132">1132</option>
                     <option value="1131">1131</option>
                   </select>
@@ -180,21 +173,15 @@ const handleSearch = async () => {
                     <option value="護理助產及婦女健康系">護理助產及婦女健康系</option>
                     <option value="醫護教育暨數位學習系">醫護教育暨數位學習系</option>
                     <option value="中西醫結合護理研究所">中西醫結合護理研究所</option>
-                    <option value="中西醫結合護理研究所(舊)">中西醫結合護理研究所(舊)</option>
-                    <option value="健康科技學院(不分系)">健康科技學院(不分系)</option>
                     <option value="健康事業管理系">健康事業管理系</option>
                     <option value="資訊管理系">資訊管理系</option>
                     <option value="休閒產業與健康促進系">休閒產業與健康促進系</option>
                     <option value="長期照護系">長期照護系</option>
                     <option value="語言治療與聽力學系">語言治療與聽力學系</option>
-                    <option value="國際健康科技碩士學位學程">國際健康科技碩士學位學程</option>
-                    <option value="人類發展與健康學院(不分系)">人類發展與健康學院(不分系)</option>
                     <option value="嬰幼兒保育系">嬰幼兒保育系</option>
                     <option value="運動保健系">運動保健系</option>
                     <option value="生死與健康心理諮商系">生死與健康心理諮商系</option>
-                    <option value="高齡健康暨運動保健技優專班">高齡健康暨運動保健技優專班</option>
-                    <option value="智慧健康科技技優專班">智慧健康科技技優專班</option>
-                    <option value="人工智慧與健康大數據研究所">人工智慧與健康大數據研究所</option>
+                    {/* ...其他系所可自行補充... */}
                   </select>
                   <ChevronDown className="absolute right-3 top-3.5 w-4 h-4 text-gray-400 pointer-events-none" />
                 </div>
@@ -384,12 +371,14 @@ const handleSearch = async () => {
             <Trash2 className="w-5 h-5" />
             清除重填
           </button>
+          
           <button 
             onClick={handleSearch}
-            className="bg-black hover:bg-gray-800 text-white text-lg font-bold px-12 py-3 rounded-full shadow-lg shadow-gray-200 transition-all active:scale-95 flex items-center gap-2"
+            disabled={isLoading}
+            className="bg-black hover:bg-gray-800 text-white text-lg font-bold px-12 py-3 rounded-full shadow-lg shadow-gray-200 transition-all active:scale-95 flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            <Search className="w-5 h-5" />
-            送出查詢
+            {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
+            {isLoading ? '搜尋中...' : '送出查詢'}
           </button>
         </div>
       </div>
@@ -414,16 +403,23 @@ const handleSearch = async () => {
           </div>
 
           <div className="min-w-[1300px] flex flex-col">
-            {searchResults.map((course) => (
-              <CourseListItem 
-                key={course.id}
-                course={course}
-                isAdded={cartItems.some(item => item.id === course.id)}
-                onToggle={onToggleCartItem}
-                onLocationClick={onLocationClick}
-                onDiscussionClick={onDiscussionClick}
-              />
-            ))}
+            {searchResults.length === 0 ? (
+              <div className="text-center py-10 text-gray-500 font-bold">
+                🐢 沒有找到符合條件的課程
+              </div>
+            ) : (
+              searchResults.map((course) => (
+                <CourseListItem 
+                  key={course.id}
+                  course={course}
+                  // 使用寬鬆比對 (==) 以防 ID 型別不同
+                  isAdded={cartItems.some(item => item.id == course.id)}
+                  onToggle={onToggleCartItem}
+                  onLocationClick={onLocationClick}
+                  onDiscussionClick={onDiscussionClick}
+                />
+              ))
+            )}
           </div>
         </div>
       ) : (
