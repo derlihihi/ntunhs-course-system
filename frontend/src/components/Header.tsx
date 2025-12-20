@@ -3,12 +3,21 @@
 import { useState, useRef, useEffect } from 'react'
 import { ShoppingCart, User, ChevronDown, LogOut, ShieldCheck } from 'lucide-react'
 
+// 定義 User 的介面，讓它符合後端回傳的格式
+interface UserData {
+  name: string;
+  department: string;
+  student_id?: string; // 資料庫欄位名稱
+  id?: string;         // 相容舊有格式
+  role: string | number; // 可能是 'admin' 字串或是 0/1 數字
+}
+
 interface HeaderProps {
   activeTab: string
   setActiveTab: (tab: string) => void
   cartCount: number
   onOpenCart: () => void
-  user: any
+  user: UserData | null // 使用上面定義的介面
   onOpenLogin: () => void
   onLogout: () => void
 }
@@ -29,6 +38,9 @@ export default function Header({ activeTab, setActiveTab, cartCount, onOpenCart,
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
+
+  // 判斷是否為管理員的輔助函式
+  const isAdmin = user?.role === 'admin' || user?.role === 0;
 
   return (
     <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-200 h-[70px] flex items-center justify-between px-6 md:px-10 transition-all">
@@ -54,6 +66,7 @@ export default function Header({ activeTab, setActiveTab, cartCount, onOpenCart,
       </nav>
 
       <div className="flex items-center gap-4">
+        {/* 購物車按鈕：只有登入才顯示，或是你想一直顯示也可以 */}
         <button onClick={onOpenCart} className="relative p-2.5 rounded-full hover:bg-gray-100 transition text-gray-600 group">
           <ShoppingCart className="w-5 h-5 group-hover:scale-110 transition-transform" />
           {cartCount > 0 && (
@@ -70,7 +83,8 @@ export default function Header({ activeTab, setActiveTab, cartCount, onOpenCart,
               className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-full hover:bg-gray-200 transition active:scale-95 border border-transparent hover:border-gray-300"
             >
               <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-700 shadow-sm border border-gray-200">
-                {user.role === 'admin' ? <ShieldCheck className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                {/* 根據角色顯示不同 Icon */}
+                {isAdmin ? <ShieldCheck className="w-4 h-4" /> : <User className="w-4 h-4" />}
               </div>
               <span className="text-sm font-bold text-gray-700 hidden sm:block">{user.name}</span>
               <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
@@ -79,22 +93,30 @@ export default function Header({ activeTab, setActiveTab, cartCount, onOpenCart,
             {isUserMenuOpen && (
               <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-scale-up z-50 origin-top-right">
                 <div className="px-6 py-4 border-b border-gray-100">
-                  <p className="text-xs text-gray-400 font-bold mb-1 uppercase tracking-wide">名稱</p>
+                  <p className="text-xs text-gray-400 font-bold mb-1 uppercase tracking-wide">
+                    {isAdmin ? '管理員' : '學生'}名稱
+                  </p>
                   <p className="text-lg font-bold text-gray-900 truncate">{user.name}</p>
                 </div>
                 <div className="py-2">
                   <div className="px-6 py-2.5 hover:bg-gray-50 transition cursor-default">
-                    <p className="text-xs text-gray-400 font-bold mb-0.5">學號</p>
-                    <p className="text-sm font-bold text-gray-700 font-mono tracking-wide">{user.id}</p>
+                    <p className="text-xs text-gray-400 font-bold mb-0.5">學號 / 編號</p>
+                    {/* 這裡改成顯示 student_id，如果沒有就找 id */}
+                    <p className="text-sm font-bold text-gray-700 font-mono tracking-wide">
+                      {user.student_id || user.id}
+                    </p>
                   </div>
                   <div className="px-6 py-2.5 hover:bg-gray-50 transition cursor-default">
-                    <p className="text-xs text-gray-400 font-bold mb-0.5">系所</p>
+                    <p className="text-xs text-gray-400 font-bold mb-0.5">系所 / 單位</p>
                     <p className="text-sm font-bold text-gray-700">{user.department}</p>
                   </div>
                 </div>
                 <div className="p-2 border-t border-gray-100 bg-gray-50/50">
                   <button 
-                    onClick={onLogout}
+                    onClick={() => {
+                      onLogout();
+                      setIsUserMenuOpen(false); // 登出後關閉選單
+                    }}
                     className="w-full flex items-center justify-center gap-2 text-sm font-bold text-gray-500 hover:text-red-600 hover:bg-white bg-transparent py-3 rounded-xl transition shadow-sm hover:shadow-md border border-transparent hover:border-gray-100"
                   >
                     <LogOut className="w-4 h-4" /> 登出系統

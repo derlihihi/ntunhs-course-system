@@ -1,7 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { X, User, Lock, Building2, IdCard, CheckCircle } from 'lucide-react'
+import { X, User, Lock, Building2, IdCard, CheckCircle, Loader2 } from 'lucide-react'
+
+// 定義後端 API 網址
+// 建議放在 .env.local: NEXT_PUBLIC_API_URL=http://localhost:8000/api/auth
+const API_PORT = 8000;
+const API_BASE_URL = `http://localhost:${API_PORT}/api/auth`;
 
 interface AuthModalProps {
   onClose: () => void
@@ -9,7 +14,9 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
-  const [isRegister, setIsRegister] = useState(false) // 控制是登入還是註冊模式
+  const [isRegister, setIsRegister] = useState(false)
+  const [isLoading, setIsLoading] = useState(false) // 新增：載入狀態
+  const [errorMsg, setErrorMsg] = useState('')      // 新增：錯誤訊息顯示
   
   // 表單資料
   const [formData, setFormData] = useState({
@@ -17,37 +24,79 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
     name: '',
     studentId: '',
     password: '',
-    confirmPassword: '' // 新增確認密碼
+    confirmPassword: ''
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMsg('') // 清除舊錯誤
+    setIsLoading(true) // 開始轉圈圈
 
-    // 1. 註冊時的額外檢查
-    if (isRegister) {
-      if (formData.password !== formData.confirmPassword) {
-        alert('兩次密碼輸入不一致，請重新檢查！')
-        return
+    // 1. 前端基本檢查
+    if (isRegister && formData.password !== formData.confirmPassword) {
+      setErrorMsg('兩次密碼輸入不一致，請重新檢查！');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // 2. 決定要打哪一支 API
+      const endpoint = isRegister ? '/register' : '/login';
+      const url = `${API_BASE_URL}${endpoint}`;
+
+      // 3. 準備要傳送的資料
+      // 如果是登入，只需要學號跟密碼；註冊則需要全部 (除了 confirmPassword)
+      const payload = isRegister 
+        ? { 
+            studentId: formData.studentId, 
+            password: formData.password, 
+            name: formData.name, 
+            department: formData.department 
+          }
+        : { 
+            studentId: formData.studentId, 
+            password: formData.password 
+          };
+
+      // 4. 發送請求 (Fetch)
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // 如果後端回傳錯誤 (例如 400, 401)
+        throw new Error(data.message || '操作失敗，請稍後再試');
       }
-      // 這裡未來會發送 API 到後端註冊
-      console.log('註冊資料:', formData)
+
+      // 5. 成功後的處理
+      // data.user 是後端回傳的使用者資料
+      // data.role 是後端回傳的身分 (admin/student) 或 0/1
+      
+      const userData = {
+        ...data.user,
+        role: data.user.role === 0 ? 'admin' : 'student', // 轉換資料庫的 0/1 為前端看的字串
+        isLoggedIn: true
+      };
+
+      // 儲存到 localStorage (選擇性，看你是否要在重整後保持登入)
+      localStorage.setItem('user', JSON.stringify(userData));
+
+      onLoginSuccess(userData);
+      onClose();
+      alert(isRegister ? '註冊成功！已自動登入' : '登入成功！');
+
+    } catch (err: any) {
+      console.error('API Error:', err);
+      setErrorMsg(err.message || '伺服器連線錯誤');
+    } finally {
+      setIsLoading(false); // 結束轉圈圈
     }
-
-    // 2. 模擬管理者登入邏輯 (開發階段用，正式環境請交給後端判斷)
-    // 假設管理者帳號是 "admin"，密碼是 "admin123"
-    const isAdmin = formData.studentId === 'admin' && formData.password === 'admin123'
-
-    // 3. 建構使用者資料 (模擬後端回傳)
-    const mockUser = {
-      name: isAdmin ? '系統管理員' : (isRegister ? formData.name : '吳名式'),
-      id: formData.studentId,
-      department: isAdmin ? '教務處' : (isRegister ? formData.department : '資訊管理系'),
-      role: isAdmin ? 'admin' : 'student', // 區分角色
-      isLoggedIn: true
-    }
-
-    onLoginSuccess(mockUser)
-    onClose()
   }
 
   return (
@@ -75,10 +124,18 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
         <div className="p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             
+            {/* 錯誤訊息顯示區 */}
+            {errorMsg && (
+              <div className="p-3 bg-red-50 text-red-500 text-sm rounded-lg flex items-center gap-2">
+                <div className="w-1 h-1 bg-red-500 rounded-full"></div>
+                {errorMsg}
+              </div>
+            )}
+
             {/* --- 註冊專用欄位開始 --- */}
             {isRegister && (
               <>
-                {/* 1. 系所 (下拉選單) */}
+                {/* 1. 系所 */}
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-gray-500 ml-1">系所</label>
                   <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
@@ -115,14 +172,14 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
             )}
             {/* --- 註冊專用欄位結束 --- */}
 
-            {/* 3. 學號 (登入/註冊共用) */}
+            {/* 3. 學號 */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-gray-500 ml-1">學號 / 員工編號</label>
               <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
                 <IdCard className="w-5 h-5 text-gray-400" />
                 <input 
                   type="text" 
-                  placeholder="例如：122214250" 
+                  placeholder="例如：11124001" 
                   className="bg-transparent outline-none flex-1 text-sm font-medium"
                   required
                   value={formData.studentId}
@@ -131,7 +188,7 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
               </div>
             </div>
 
-            {/* 4. 密碼 (登入/註冊共用) */}
+            {/* 4. 密碼 */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-gray-500 ml-1">密碼</label>
               <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 px-4 py-3 rounded-xl focus-within:border-black focus-within:ring-1 focus-within:ring-black transition-all">
@@ -147,7 +204,7 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
               </div>
             </div>
 
-            {/* 5. 確認密碼 (註冊專用) */}
+            {/* 5. 確認密碼 */}
             {isRegister && (
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-500 ml-1">確認密碼</label>
@@ -165,7 +222,11 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
               </div>
             )}
 
-            <button className="w-full bg-black text-white font-bold py-4 rounded-xl hover:bg-gray-800 transition active:scale-95 shadow-lg mt-4">
+            <button 
+              disabled={isLoading}
+              className="w-full bg-black text-white font-bold py-4 rounded-xl hover:bg-gray-800 transition active:scale-95 shadow-lg mt-4 disabled:bg-gray-400 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+            >
+              {isLoading && <Loader2 className="w-5 h-5 animate-spin" />}
               {isRegister ? '註冊帳號' : '登入系統'}
             </button>
 
@@ -177,9 +238,11 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
           <p className="text-gray-500">
             {isRegister ? '已經有帳號了嗎？' : '還沒有帳號嗎？'}
             <button 
+              type="button" // 記得加上 type="button" 避免觸發 submit
               onClick={() => {
                 setIsRegister(!isRegister)
-                setFormData({ ...formData, password: '', confirmPassword: '' }) // 切換時清空密碼
+                setErrorMsg('')
+                setFormData({ ...formData, password: '', confirmPassword: '' })
               }}
               className="font-bold text-black ml-2 hover:underline"
             >
