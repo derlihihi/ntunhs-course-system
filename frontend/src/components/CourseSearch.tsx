@@ -119,11 +119,29 @@ export default function CourseSearch({ cartItems, onToggleCartItem, onLocationCl
     Cookies.remove('course_has_searched')
   }
 
-  const handleSearch = () => {
+const handleSearch = async () => {
     setHasSearched(true)
-    console.log('送出查詢條件:', filters)
-    setSearchResults(MOCK_COURSES)
-  }
+    
+    try {
+        const response = await fetch('http://localhost:8000/api/courses/search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(filters) // 把目前的 filters 狀態送出去
+        });
+
+        const data = await response.json();
+        
+        if (response.ok) {
+            setSearchResults(data); // 填入後端回傳的真資料
+        } else {
+            console.error('查詢失敗');
+        }
+    } catch (error) {
+        console.error('連線錯誤', error);
+    }
+}
 
   return (
     <>
