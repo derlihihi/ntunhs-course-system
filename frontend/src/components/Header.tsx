@@ -1,15 +1,86 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { ShoppingCart, User, ChevronDown, LogOut, ShieldCheck } from 'lucide-react'
+import { ShoppingCart, User, ChevronDown, LogOut, ShieldCheck, Palette, Check, LogIn } from 'lucide-react'
 
-// 定義 User 的介面，讓它符合後端回傳的格式
+// --- 1. 重新定義主題介面與色票 ---
+export interface Theme {
+  id: string;
+  name: string;
+  colors: {
+    appBg: string;      // 最外層應用程式背景
+    headerBg: string;   // Header 背景 (通常帶透明度)
+    cardBg: string;     // 卡片/區塊背景 (如搜尋框)
+    mainText: string;   // 主要文字顏色
+    subText: string;    // 次要文字顏色 (麵包屑、說明)
+    border: string;     // 邊框顏色
+    accentBg: string;   // 強調色背景 (按鈕、Active Tab)
+    accentText: string; // 強調色背景上的文字顏色
+    hoverBg: string;    // 通用 Hover 背景色
+    colorPreview: string; // 用於色票選擇器的預覽色
+  }
+}
+
+// 根據提供的圖片定義色票
+export const THEMES: Theme[] = [
+  {
+    id: 'default', name: '預設 (極簡灰)',
+    colors: {
+      appBg: '#F5F5F7', headerBg: 'rgba(255,255,255,0.8)', cardBg: '#ffffff',
+      mainText: '#111827', subText: '#6B7280', border: '#E5E7EB',
+      accentBg: '#000000', accentText: '#ffffff', hoverBg: '#F3F4F6',
+      colorPreview: '#F5F5F7'
+    }
+  },
+  // Image 5: Gray Blue + Dark Blue
+  {
+    id: 'grayblue', name: '莫蘭迪藍灰',
+    colors: {
+      appBg: '#cecbcc', headerBg: 'rgba(220,218,219,0.8)', cardBg: '#e4e6df',
+      mainText: '#1f3555', subText: '#515561', border: '#9ca3af',
+      accentBg: '#1f3555', accentText: '#cecbcc', hoverBg: '#b0b3b8',
+      colorPreview: '#1f3555'
+    }
+  },
+   // Image 3: Beige + Brown
+  {
+    id: 'beigebrown', name: '溫暖褐米',
+    colors: {
+      appBg: '#ede8e3', headerBg: 'rgba(245,242,239,0.8)', cardBg: '#dad0c7',
+      mainText: '#514935', subText: '#907e6e', border: '#c5bba4',
+      accentBg: '#514935', accentText: '#ede8e3', hoverBg: '#d0c5bc',
+      colorPreview: '#514935'
+    }
+  },
+  // Image 2: Beige + Dark Blue
+  {
+    id: 'beigedarkblue', name: '復古深藍米',
+    colors: {
+      appBg: '#eee7d3', headerBg: 'rgba(248,244,232,0.8)', cardBg: '#dfd7bb',
+      mainText: '#103946', subText: '#7a6f55', border: '#b8af93',
+      accentBg: '#103946', accentText: '#eee7d3', hoverBg: '#dcd3b7',
+      colorPreview: '#103946'
+    }
+  },
+   // Image 4: White + Gold (Adjusted for readability)
+  {
+    id: 'whitegold', name: '輕奢白金',
+    colors: {
+      appBg: '#e4e6df', headerBg: 'rgba(240,242,235,0.8)', cardBg: '#f0f2ec',
+      mainText: '#5c533a', subText: '#a89f86', border: '#d4c390',
+      accentBg: '#d4c390', accentText: '#ffffff', hoverBg: '#dcded7',
+      colorPreview: '#d4c390'
+    }
+  },
+]
+
+// 定義 User 的介面
 interface UserData {
   name: string;
   department: string;
-  student_id?: string; // 資料庫欄位名稱
-  id?: string;         // 相容舊有格式
-  role: string | number; // 可能是 'admin' 字串或是 0/1 數字
+  student_id?: string;
+  id?: string;        
+  role: string | number;
 }
 
 interface HeaderProps {
@@ -17,16 +88,27 @@ interface HeaderProps {
   setActiveTab: (tab: string) => void
   cartCount: number
   onOpenCart: () => void
-  user: UserData | null // 使用上面定義的介面
+  user: UserData | null
   onOpenLogin: () => void
   onLogout: () => void
+  // --- 2. 新增主題相關 Props ---
+  currentTheme: Theme
+  setTheme: (theme: Theme) => void
 }
 
 const NAV_ITEMS = ['課程查詢', '預先選課', '討論紀錄']
 
-export default function Header({ activeTab, setActiveTab, cartCount, onOpenCart, user, onOpenLogin, onLogout }: HeaderProps) {
+export default function Header({ 
+  activeTab, setActiveTab, cartCount, onOpenCart, 
+  user, onOpenLogin, onLogout,
+  currentTheme, setTheme // 解構新 Props
+}: HeaderProps) {
+  
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
+
+  // 新增：主題選單開關
+  const [isThemeOpen, setIsThemeOpen] = useState(false)
 
   // 點擊外部關閉選單
   useEffect(() => {
@@ -39,85 +121,134 @@ export default function Header({ activeTab, setActiveTab, cartCount, onOpenCart,
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  // 判斷是否為管理員的輔助函式
   const isAdmin = user?.role === 'admin' || user?.role === 0;
 
   return (
-    <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-200 h-[70px] flex items-center justify-between px-6 md:px-10 transition-all">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 bg-black rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-md">N</div>
-        <span className="text-lg font-bold text-gray-900 tracking-tight hidden md:block">國北護課程系統</span>
+    // 🔥 Header 本身使用 CSS 變數來設定背景和邊框顏色
+    <header className="sticky top-0 z-40 h-[70px] flex items-center justify-between px-6 md:px-10 transition-all backdrop-blur-md bg-[var(--header-bg)] border-b border-[var(--border-color)]">
+      
+      {/* Logo 區域 - 使用強調色變數 */}
+      <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setActiveTab('課程查詢')}>
+        <div className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm shadow-md transition-colors bg-[var(--accent-bg)] text-[var(--accent-text)]">N</div>
+        <span className="text-lg font-bold tracking-tight hidden md:block transition-colors text-[var(--main-text)]">國北護課程系統</span>
       </div>
 
+      {/* Nav Tabs - 使用強調色與文字變數 */}
       <nav className="hidden md:flex items-center gap-10 h-full">
         {NAV_ITEMS.map((item) => (
           <button
             key={item}
             onClick={() => setActiveTab(item)}
             className={`relative h-full flex items-center text-sm font-bold transition-colors duration-200
-              ${activeTab === item ? 'text-gray-900' : 'text-gray-500 hover:text-gray-800'}`}
+              ${activeTab === item ? 'text-[var(--main-text)]' : 'text-[var(--sub-text)] hover:text-[var(--main-text)]'}`}
           >
             {item}
             {activeTab === item && (
-              <span className="absolute bottom-0 left-0 w-full h-[3px] bg-gray-900 rounded-t-full"></span>
+              // Active Tab 底線使用強調色
+              <span className="absolute bottom-0 left-0 w-full h-[3px] rounded-t-full bg-[var(--accent-bg)]"></span>
             )}
           </button>
         ))}
       </nav>
 
-      <div className="flex items-center gap-4">
-        {/* 購物車按鈕：只有登入才顯示，或是你想一直顯示也可以 */}
-        <button onClick={onOpenCart} className="relative p-2.5 rounded-full hover:bg-gray-100 transition text-gray-600 group">
+      {/* Right Actions */}
+      <div className="flex items-center gap-3">
+        
+        {/* === 3. 自定義顏色按鈕 (新增) === */}
+        <div className="relative">
+          <button 
+            onClick={() => setIsThemeOpen(!isThemeOpen)}
+            // 使用 hover 背景變數和次要文字變數
+            className="p-2.5 rounded-full transition relative hover:bg-[var(--hover-bg)] text-[var(--sub-text)]"
+            title="更換主題顏色"
+          >
+            <Palette className="w-5 h-5" />
+          </button>
+
+          {isThemeOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setIsThemeOpen(false)}></div>
+              
+              {/* 下拉選單 - 使用卡片背景、邊框和文字變數 */}
+              <div className="absolute right-0 top-12 w-48 rounded-2xl shadow-xl p-2 z-20 flex flex-col gap-1 animate-scale-up origin-top-right bg-[var(--card-bg)] border border-[var(--border-color)]">
+                <p className="text-xs font-bold px-3 py-2 text-[var(--sub-text)]">選擇主題風格</p>
+                {THEMES.map((theme) => (
+                  <button
+                    key={theme.id}
+                    onClick={() => {
+                      setTheme(theme)
+                      setIsThemeOpen(false)
+                    }}
+                    // 選單項目 Hover 和 Active 狀態
+                    className={`flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm font-bold transition
+                      ${currentTheme.id === theme.id ? 'bg-[var(--hover-bg)] text-[var(--main-text)]' : 'text-[var(--sub-text)] hover:bg-[var(--hover-bg)] hover:text-[var(--main-text)]'}
+                    `}
+                  >
+                    <div 
+                      className="w-5 h-5 rounded-full border shadow-sm border-[var(--border-color)]" 
+                      style={{ backgroundColor: theme.colors.colorPreview }}
+                    ></div>
+                    <span className="flex-1 text-left">{theme.name}</span>
+                    {currentTheme.id === theme.id && <Check className="w-4 h-4 text-[var(--accent-bg)]" />}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 購物車按鈕 */}
+        <button onClick={onOpenCart} className="relative p-2.5 rounded-full transition group hover:bg-[var(--hover-bg)] text-[var(--sub-text)]">
           <ShoppingCart className="w-5 h-5 group-hover:scale-110 transition-transform" />
           {cartCount > 0 && (
-            <span className="absolute top-1 right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-white">
+            <span className="absolute top-1 right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-[var(--card-bg)]">
               {cartCount}
             </span>
           )}
         </button>
         
+        {/* User Menu / Login Button */}
         {user ? (
-          <div className="relative" ref={userMenuRef}>
+          <div className="relative pl-2" ref={userMenuRef}>
             <button 
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-              className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-full hover:bg-gray-200 transition active:scale-95 border border-transparent hover:border-gray-300"
+              className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-full transition active:scale-95 border border-transparent hover:bg-[var(--hover-bg)] hover:border-[var(--border-color)]"
             >
-              <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-700 shadow-sm border border-gray-200">
-                {/* 根據角色顯示不同 Icon */}
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shadow-sm bg-[var(--hover-bg)] text-[var(--main-text)] border border-[var(--border-color)]">
                 {isAdmin ? <ShieldCheck className="w-4 h-4" /> : <User className="w-4 h-4" />}
               </div>
-              <span className="text-sm font-bold text-gray-700 hidden sm:block">{user.name}</span>
-              <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+              <span className="text-sm font-bold hidden sm:block text-[var(--main-text)]">{user.name}</span>
+              <ChevronDown className={`w-3 h-3 transition-transform duration-200 text-[var(--sub-text)] ${isUserMenuOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isUserMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-scale-up z-50 origin-top-right">
-                <div className="px-6 py-4 border-b border-gray-100">
-                  <p className="text-xs text-gray-400 font-bold mb-1 uppercase tracking-wide">
+              // User Dropdown - 使用卡片背景變數
+              <div className="absolute right-0 top-full mt-2 w-64 rounded-2xl shadow-xl overflow-hidden animate-scale-up z-50 origin-top-right bg-[var(--card-bg)] border border-[var(--border-color)]">
+                <div className="px-6 py-4 border-b border-[var(--border-color)]">
+                  <p className="text-xs font-bold mb-1 uppercase tracking-wide text-[var(--sub-text)]">
                     {isAdmin ? '管理員' : '學生'}名稱
                   </p>
-                  <p className="text-lg font-bold text-gray-900 truncate">{user.name}</p>
+                  <p className="text-lg font-bold truncate text-[var(--main-text)]">{user.name}</p>
                 </div>
                 <div className="py-2">
-                  <div className="px-6 py-2.5 hover:bg-gray-50 transition cursor-default">
-                    <p className="text-xs text-gray-400 font-bold mb-0.5">學號 / 編號</p>
-                    {/* 這裡改成顯示 student_id，如果沒有就找 id */}
-                    <p className="text-sm font-bold text-gray-700 font-mono tracking-wide">
+                  <div className="px-6 py-2.5 transition cursor-default hover:bg-[var(--hover-bg)]">
+                    <p className="text-xs font-bold mb-0.5 text-[var(--sub-text)]">學號 / 編號</p>
+                    <p className="text-sm font-bold font-mono tracking-wide text-[var(--main-text)]">
                       {user.student_id || user.id}
                     </p>
                   </div>
-                  <div className="px-6 py-2.5 hover:bg-gray-50 transition cursor-default">
-                    <p className="text-xs text-gray-400 font-bold mb-0.5">系所 / 單位</p>
-                    <p className="text-sm font-bold text-gray-700">{user.department}</p>
+                  <div className="px-6 py-2.5 transition cursor-default hover:bg-[var(--hover-bg)]">
+                    <p className="text-xs font-bold mb-0.5 text-[var(--sub-text)]">系所 / 單位</p>
+                    <p className="text-sm font-bold text-gray-700 text-[var(--main-text)]">{user.department}</p>
                   </div>
                 </div>
-                <div className="p-2 border-t border-gray-100 bg-gray-50/50">
+                <div className="p-2 border-t border-[var(--border-color)] bg-[var(--hover-bg)]/50">
                   <button 
                     onClick={() => {
                       onLogout();
-                      setIsUserMenuOpen(false); // 登出後關閉選單
+                      setIsUserMenuOpen(false);
                     }}
-                    className="w-full flex items-center justify-center gap-2 text-sm font-bold text-gray-500 hover:text-red-600 hover:bg-white bg-transparent py-3 rounded-xl transition shadow-sm hover:shadow-md border border-transparent hover:border-gray-100"
+                    className="w-full flex items-center justify-center gap-2 text-sm font-bold py-3 rounded-xl transition shadow-sm hover:shadow-md border border-transparent bg-transparent text-[var(--sub-text)] hover:text-red-600 hover:bg-[var(--card-bg)] hover:border-[var(--border-color)]"
                   >
                     <LogOut className="w-4 h-4" /> 登出系統
                   </button>
@@ -128,9 +259,10 @@ export default function Header({ activeTab, setActiveTab, cartCount, onOpenCart,
         ) : (
           <button 
             onClick={onOpenLogin}
-            className="hidden sm:flex items-center gap-2 bg-black hover:bg-gray-800 text-white px-5 py-2 rounded-full text-xs font-bold transition-all shadow-lg shadow-gray-200 active:scale-95"
+            // 登入按鈕使用強調色
+            className="hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all shadow-lg active:scale-95 bg-[var(--accent-bg)] text-[var(--accent-text)] hover:opacity-90 shadow-[var(--border-color)]"
           >
-            <User className="w-4 h-4" /> 登入
+            <LogIn className="w-4 h-4" /> 登入
           </button>
         )}
       </div>

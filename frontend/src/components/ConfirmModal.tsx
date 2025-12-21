@@ -27,29 +27,31 @@ export default function ConfirmModal({
       <div className="absolute inset-0 bg-black/30 backdrop-blur-md" onClick={onClose}></div>
       
       {/* 彈窗本體 */}
-      <div className="relative bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden flex flex-col p-6 text-center transform transition-all scale-100">
+      <div className="relative bg-[var(--card-bg)] w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden flex flex-col p-6 text-center transform transition-all scale-100">
         
-        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <AlertCircle className={`w-6 h-6 ${isDanger ? 'text-red-500' : 'text-black'}`} />
+        <div className="w-12 h-12 bg-[var(--hover-bg)] rounded-full flex items-center justify-center mx-auto mb-4">
+          <AlertCircle className={`w-6 h-6 ${isDanger ? 'text-red-500' : 'text-[var(--main-text)]'}`} />
         </div>
 
-        <h3 className="text-xl font-bold text-gray-900 mb-2">{title}</h3>
-        <p className="text-sm text-gray-500 mb-8 leading-relaxed">
+        <h3 className="text-xl font-bold text-[var(--main-text)] mb-2">{title}</h3>
+        <p className="text-sm text-[var(--sub-text)] mb-8 leading-relaxed">
           {content}
         </p>
 
         <div className="flex gap-3">
           <button 
             onClick={onClose}
-            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition"
+            className="flex-1 bg-[var(--hover-bg)] hover:opacity-80 text-[var(--main-text)] font-bold py-3 rounded-xl transition"
           >
             {cancelText}
           </button>
           <button 
             onClick={onConfirm}
-            className={`flex-1 font-bold py-3 rounded-xl text-white transition shadow-lg shadow-gray-200 active:scale-95
-              ${isDanger ? 'bg-red-500 hover:bg-red-600' : 'bg-black hover:bg-gray-800'}
-            `}
+            className={`flex-1 font-bold py-3 rounded-xl text-white transition shadow-lg active:scale-95
+              ${isDanger 
+                ? 'bg-red-500 hover:bg-red-600 shadow-red-200/50' 
+                : 'bg-[var(--accent-bg)] hover:opacity-90 shadow-[var(--accent-bg)]/30'
+              }`}
           >
             {confirmText}
           </button>

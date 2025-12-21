@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Pin, Eye, EyeOff, Trash2, Download, Lock, Plus, AlertCircle, X, Search, Loader2, Check } from 'lucide-react'
+import { Pin, Eye, EyeOff, Trash2, Download, Lock, Plus, AlertCircle, X, Search, Loader2, Check, ChevronDown } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import ConfirmModal from './ConfirmModal'
 
@@ -12,7 +12,8 @@ interface Course {
   credits: number
   teacher: string
   location: string
-  type: string // 必修/選修/通識
+  type: string
+  semester?: string
   isPinned?: boolean
   isHidden?: boolean
 }
@@ -25,37 +26,28 @@ interface PreSelectionProps {
   onAddCourse: (course: any) => void
 }
 
-// 課程配色邏輯
+// 課程配色邏輯（保留原邏輯，但使用變數調整深色模式下的對比）
 const getCourseColor = (type: string, isConflict: boolean) => {
-  if (isConflict) return 'bg-red-50 text-red-600 border-red-200'
-  if (type === '必修') return 'bg-blue-50 text-blue-700 border-blue-100'
-  if (type === '選修') return 'bg-orange-50 text-orange-700 border-orange-100'
-  if (type === '通識') return 'bg-green-50 text-green-700 border-green-100'
-  return 'bg-gray-50 text-gray-700 border-gray-100'
+  if (isConflict) return 'bg-red-100/30 text-red-600 border-red-300/50'
+  if (type === '必修') return 'bg-blue-100/30 text-blue-600 border-blue-300/50'
+  if (type === '選修') return 'bg-orange-100/30 text-orange-600 border-orange-300/50'
+  if (type === '通識') return 'bg-green-100/30 text-green-600 border-green-300/50'
+  return 'bg-[var(--hover-bg)] text-[var(--main-text)] border-[var(--border-color)]'
 }
 
 export default function PreSelection({ initialCourses, user, onRemoveFromGlobalCart, onOpenLogin, onAddCourse }: PreSelectionProps) {
   const [courses, setCourses] = useState<Course[]>([])
+  const [selectedSemester, setSelectedSemester] = useState('1132')
   const scheduleRef = useRef<HTMLDivElement>(null)
   
-  // 顯示設定
   const [showWeekend, setShowWeekend] = useState(false)
   const [showTimeDetail, setShowTimeDetail] = useState(true)
-  
-  // 刪除確認
   const [deleteTarget, setDeleteTarget] = useState<Course | null>(null)
-
-  // 智能選課 Hover 狀態
   const [hoverSlot, setHoverSlot] = useState<{day: number, period: number} | null>(null)
-
-  // 選中的時段 (控制左側面板切換)
   const [selectedSlot, setSelectedSlot] = useState<{day: number, period: number} | null>(null)
-  
-  // 推薦課程清單 (從後端抓取)
   const [recommendations, setRecommendations] = useState<Course[]>([])
   const [isLoadingRecs, setIsLoadingRecs] = useState(false)
 
-  // 同步外部傳入的課程
   useEffect(() => {
     setCourses(prev => {
       return initialCourses.map(newCourse => {
@@ -65,7 +57,6 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     })
   }, [initialCourses])
 
-  // 🔥 關鍵邏輯：當使用者點選某個格子時，去後端抓取該時段的課程
   useEffect(() => {
     const fetchRecommendations = async () => {
       if (!selectedSlot) return;
@@ -73,21 +64,15 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
       setIsLoadingRecs(true);
       setRecommendations([]);
 
-      // 1. 轉換天數： 1 -> "週一"
       const dayMap = ['週一', '週二', '週三', '週四', '週五', '週六', '週日'];
       const targetDay = dayMap[selectedSlot.day - 1];
-
-      // 2. 轉換節次： 3 -> "節03" (配合後端邏輯: substring(1,3))
-      // 確保格式是兩位數，例如 "03", "10"
       const periodStr = selectedSlot.period < 10 ? `0${selectedSlot.period}` : `${selectedSlot.period}`;
       const targetPeriod = `節${periodStr}`; 
 
-      // 3. 準備搜尋條件 (Payload)
       const filters = {
-        semester: '1132', // ⚠️ 注意：確認你的學期是否正確
+        semester: selectedSemester, 
         days: [targetDay],
         periods: [targetPeriod],
-        // 其他欄位留空
         department: '',
         systems: [],
         grades: [],
@@ -109,7 +94,6 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
         
         if (res.ok) {
           const data = await res.json();
-          // ✅ 修改：這裡不再過濾掉已選課程，而是全部保留，交給 UI 判斷顯示狀態
           setRecommendations(data);
         }
       } catch (error) {
@@ -120,26 +104,23 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     };
 
     fetchRecommendations();
-  }, [selectedSlot]); // 移除 courses 依賴，避免重複觸發 API，UI 狀態由 render 時判斷即可
+  }, [selectedSlot, selectedSemester]);
 
-
-  // --- 權限控管 ---
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center py-20 animate-fade-in-up h-[60vh]">
-        <div className="w-20 h-20 bg-gray-100 rounded-3xl flex items-center justify-center mb-6">
-          <Lock className="w-8 h-8 text-gray-400" />
+        <div className="w-20 h-20 bg-[var(--hover-bg)] rounded-3xl flex items-center justify-center mb-6">
+          <Lock className="w-8 h-8 text-[var(--sub-text)]" />
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">預先選課功能已鎖定</h2>
-        <p className="text-gray-500 mb-8">請先登入以檢視您的排課結果與匯出課表</p>
-        <button onClick={onOpenLogin} className="bg-black text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-gray-800 transition active:scale-95">
+        <h2 className="text-2xl font-bold text-[var(--main-text)] mb-2">預先選課功能已鎖定</h2>
+        <p className="text-[var(--sub-text)] mb-8">請先登入以檢視您的排課結果與匯出課表</p>
+        <button onClick={onOpenLogin} className="bg-[var(--accent-bg)] text-white px-8 py-3 rounded-full font-bold shadow-lg hover:opacity-90 transition active:scale-95">
           登入 / 註冊
         </button>
       </div>
     )
   }
 
-  // --- 邏輯函數 ---
   const togglePin = (id: string) => {
     setCourses(prev => prev.map(c => c.id === id ? { ...c, isPinned: !c.isPinned } : c))
   }
@@ -163,23 +144,26 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     }
   }
 
-  const totalVisibleCredits = courses.filter(c => !c.isHidden).reduce((acc, c) => acc + c.credits, 0)
+  const currentSemesterCourses = courses.filter(c => !c.semester || c.semester === selectedSemester);
+  const totalVisibleCredits = currentSemesterCourses.filter(c => !c.isHidden).reduce((acc, c) => acc + c.credits, 0)
 
   const handleExportImage = async () => {
     if (scheduleRef.current) {
       try {
         const canvas = await html2canvas(scheduleRef.current, {
-          scale: 2,
-          backgroundColor: '#ffffff',
-          logging: false,
-          useCORS: true 
+          scale: 3,
+          useCORS: true,
+          backgroundColor: 'var(--card-bg)', // 改用變數，避免深色模式匯出黑底
+          width: scheduleRef.current.scrollWidth,
+          height: scheduleRef.current.scrollHeight
         })
         const image = canvas.toDataURL("image/png")
         const link = document.createElement('a')
         link.href = image
-        link.download = `${user.name}_1141課表.png`
+        link.download = `${user.name}_${selectedSemester}_課表.png`
         link.click()
       } catch (err) {
+        console.error(err)
         alert('圖片匯出失敗，請稍後再試')
       }
     }
@@ -198,7 +182,7 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     }
   }
 
-  const sortedCourses = [...courses].sort((a, b) => {
+  const sortedCourses = [...currentSemesterCourses].sort((a, b) => {
     if (a.isPinned === b.isPinned) return 0
     return a.isPinned ? -1 : 1
   })
@@ -215,76 +199,57 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     <>
       <div className="flex flex-col lg:flex-row h-[calc(100vh-140px)] gap-6 animate-fade-in-up">
         
-        {/* === 左側面板 (根據 selectedSlot 切換內容) === */}
+        {/* 左側面板 */}
         <div className="lg:w-1/3 flex flex-col gap-4">
-          <div className="flex-1 bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden flex flex-col transition-all duration-300">
+          <div className="flex-1 bg-[var(--card-bg)] rounded-3xl shadow-sm border border-[var(--border-color)] overflow-hidden flex flex-col transition-all duration-300">
             
             {selectedSlot ? (
-              // 模式 B：智能推薦列表 (真實資料)
               <>
-                <div className="p-4 border-b border-gray-100 bg-blue-50/50 flex justify-between items-center">
+                <div className="p-4 border-b border-[var(--border-color)] bg-blue-100/20 flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <Search className="w-4 h-4 text-blue-500" />
-                    <h3 className="font-bold text-blue-900">週{['一','二','三','四','五','六','日'][selectedSlot.day-1]}第{selectedSlot.period}節 推薦課程</h3>
+                    <h3 className="font-bold text-blue-700">
+                      {selectedSemester} 週{['一','二','三','四','五','六','日'][selectedSlot.day-1]}第{selectedSlot.period}節 推薦
+                    </h3>
                   </div>
-                  <button onClick={() => setSelectedSlot(null)} className="p-1.5 hover:bg-blue-100 rounded-full text-blue-400 transition">
+                  <button onClick={() => setSelectedSlot(null)} className="p-1.5 hover:bg-[var(--hover-bg)] rounded-full text-[var(--sub-text)] transition">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-blue-50/10">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--hover-bg)]/30">
                   {isLoadingRecs ? (
-                    <div className="flex flex-col items-center justify-center h-full text-blue-300 space-y-2">
+                    <div className="flex flex-col items-center justify-center h-full text-[var(--sub-text)] space-y-2">
                        <Loader2 className="w-8 h-8 animate-spin" />
                        <p className="text-xs font-bold">正在搜尋適合的課程...</p>
                     </div>
                   ) : recommendations.length > 0 ? (
                     recommendations.map(course => {
-  // 🔥 修正：使用 String() 強制轉型，確保 '58' == 58 能判定為 true
-  // 或者使用寬鬆比對 (==) 也可以，但轉字串最保險
-  const isAdded = courses.some(c => String(c.id) === String(course.id));
-
-  return (
-    <div key={course.id} className={`p-4 rounded-2xl border shadow-sm transition group
-      ${isAdded ? 'bg-gray-50 border-gray-100' : 'bg-white border-blue-100 hover:shadow-md'}
-    `}>
-      <div className="flex justify-between items-start mb-2">
-        <span className={`font-bold line-clamp-1 ${isAdded ? 'text-gray-500' : 'text-gray-900'}`}>{course.name}</span>
-        <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded ml-2 ${isAdded ? 'bg-gray-100 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>{course.type}</span>
-      </div>
-      <div className={`text-xs space-y-1 ${isAdded ? 'text-gray-400' : 'text-gray-500'}`}>
-        <p>{course.teacher} · {course.location}</p>
-        <p>{course.time} ({course.credits}學分)</p>
-      </div>
-      
-      {/* 🔥 按鈕邏輯 */}
-      <button 
-        disabled={isAdded} // ✅ 如果已加過 (isAdded 為 true)，這裡就會變成 disabled (不能按)
-        onClick={() => {
-          // 雙重保險：如果沒加過才執行
-          if (!isAdded) onAddCourse(course)
-        }}
-        className={`w-full mt-3 text-xs font-bold py-2 rounded-lg transition flex items-center justify-center gap-1
-          ${isAdded 
-            ? 'bg-gray-100 text-gray-400 cursor-not-allowed' // ✅ 樣式變灰
-            : 'bg-black text-white hover:bg-gray-800 active:scale-95'
-          }`}
-      >
-        {isAdded ? (
-          <>
-            <Check className="w-3 h-3" /> 已選擇該課程
-          </>
-        ) : (
-          <>
-            <Plus className="w-3 h-3" /> 加入此課程
-          </>
-        )}
-      </button>
-    </div>
-  )
-})
+                      const isAdded = courses.some(c => String(c.id) === String(course.id));
+                      return (
+                        <div key={course.id} className={`p-4 rounded-2xl border shadow-sm transition group ${isAdded ? 'bg-[var(--hover-bg)] border-[var(--border-color)]' : 'bg-[var(--card-bg)] border-[var(--border-color)] hover:shadow-md'}`}>
+                          <div className="flex justify-between items-start mb-2">
+                            <span className={`font-bold line-clamp-1 ${isAdded ? 'text-[var(--sub-text)]' : 'text-[var(--main-text)]'}`}>{course.name}</span>
+                            <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded ml-2 bg-[var(--hover-bg)] text-[var(--sub-text)]`}>{course.type}</span>
+                          </div>
+                          <div className={`text-xs space-y-1 ${isAdded ? 'text-[var(--sub-text)]' : 'text-[var(--sub-text)]'}`}>
+                            <p>{course.teacher} · {course.location}</p>
+                            <p>{course.time} ({course.credits}學分)</p>
+                          </div>
+                          
+                          <button 
+                            disabled={isAdded}
+                            onClick={() => { if (!isAdded) onAddCourse(course) }}
+                            className={`w-full mt-3 text-xs font-bold py-2 rounded-lg transition flex items-center justify-center gap-1
+                              ${isAdded ? 'bg-[var(--hover-bg)] text-[var(--sub-text)] cursor-not-allowed' : 'bg-[var(--accent-bg)] text-white hover:opacity-90 active:scale-95'}`}
+                          >
+                            {isAdded ? <><Check className="w-3 h-3" /> 已選擇該課程</> : <><Plus className="w-3 h-3" /> 加入此課程</>}
+                          </button>
+                        </div>
+                      )
+                    })
                   ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-2">
+                    <div className="flex flex-col items-center justify-center h-full text-[var(--sub-text)] space-y-2">
                       <AlertCircle className="w-8 h-8 opacity-20" />
                       <p className="text-xs">此時段沒有其他可用課程</p>
                     </div>
@@ -292,36 +257,35 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                 </div>
               </>
             ) : (
-              // 模式 A：已選課程列表 (保持不變)
               <>
-                <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                  <h3 className="font-bold text-gray-700">已選課程 ({courses.length})</h3>
-                  <span className="text-[10px] text-gray-400">點擊右側格子可尋找課程</span>
+                <div className="p-4 border-b border-[var(--border-color)] bg-[var(--hover-bg)] flex justify-between items-center">
+                  <h3 className="font-bold text-[var(--main-text)]">已選課程 ({sortedCourses.length})</h3>
+                  <span className="text-[10px] text-[var(--sub-text)]">學期：{selectedSemester}</span>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                   {sortedCourses.map(course => (
-                    <div key={course.id} className={`p-4 rounded-2xl border transition-all duration-200 group relative ${course.isPinned ? 'border-gray-300 bg-gray-50 shadow-inner' : 'border-gray-100 bg-white hover:border-gray-200 hover:shadow-sm'} ${course.isHidden ? 'opacity-40 grayscale' : ''}`}>
+                    <div key={course.id} className={`p-4 rounded-2xl border transition-all duration-200 group relative ${course.isPinned ? 'border-[var(--border-color)] bg-[var(--hover-bg)] shadow-inner' : 'border-[var(--border-color)] bg-[var(--card-bg)] hover:border-[var(--accent-color)]/50 hover:shadow-sm'} ${course.isHidden ? 'opacity-40 grayscale' : ''}`}>
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-2">
-                          {course.isPinned && <Pin className="w-3 h-3 text-black fill-black" />}
-                          <span className="font-bold text-gray-900 line-clamp-1">{course.name}</span>
-                          <span className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded border ${course.type === '必修' ? 'text-blue-600 border-blue-100 bg-blue-50' : course.type === '選修' ? 'text-orange-600 border-orange-100 bg-orange-50' : 'text-gray-600 border-gray-100 bg-gray-50'}`}>{course.type}</span>
+                          {course.isPinned && <Pin className="w-3 h-3 text-[var(--accent-bg)] fill-[var(--accent-bg)]" />}
+                          <span className="font-bold text-[var(--main-text)] line-clamp-1">{course.name}</span>
+                          <span className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded border ${course.type === '必修' ? 'text-blue-600 border-blue-300/50 bg-blue-100/30' : course.type === '選修' ? 'text-orange-600 border-orange-300/50 bg-orange-100/30' : 'text-[var(--sub-text)] border-[var(--border-color)] bg-[var(--hover-bg)]'}`}>{course.type}</span>
                         </div>
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => togglePin(course.id)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-black transition"><Pin className="w-4 h-4" /></button>
-                          <button onClick={() => toggleHide(course.id)} className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-black transition">{course.isHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
-                          <button onClick={() => setDeleteTarget(course)} className="p-1.5 rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition"><Trash2 className="w-4 h-4" /></button>
+                          <button onClick={() => togglePin(course.id)} className="p-1.5 rounded-full hover:bg-[var(--hover-bg)] text-[var(--sub-text)] hover:text-[var(--main-text)] transition"><Pin className="w-4 h-4" /></button>
+                          <button onClick={() => toggleHide(course.id)} className="p-1.5 rounded-full hover:bg-[var(--hover-bg)] text-[var(--sub-text)] hover:text-[var(--main-text)] transition">{course.isHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
+                          <button onClick={() => setDeleteTarget(course)} className="p-1.5 rounded-full hover:bg-red-100/50 text-[var(--sub-text)] hover:text-red-500 transition"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </div>
-                      <div className="flex justify-between text-xs text-gray-500 mt-2 font-mono">
+                      <div className="flex justify-between text-xs text-[var(--sub-text)] mt-2 font-mono">
                         <span>{course.id}</span><span>{course.time}</span><span>{course.credits} 學分</span>
                       </div>
                     </div>
                   ))}
-                  {courses.length === 0 && (
-                    <div className="text-center text-gray-400 py-10 flex flex-col items-center gap-2">
-                      <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center"><AlertCircle className="w-6 h-6 text-gray-300" /></div>
-                      <p className="text-sm">尚未加入任何課程</p>
+                  {sortedCourses.length === 0 && (
+                    <div className="text-center text-[var(--sub-text)] py-10 flex flex-col items-center gap-2">
+                      <div className="w-12 h-12 bg-[var(--hover-bg)] rounded-full flex items-center justify-center"><AlertCircle className="w-6 h-6 text-[var(--sub-text)]" /></div>
+                      <p className="text-sm">此學期尚未加入課程</p>
                     </div>
                   )}
                 </div>
@@ -330,83 +294,95 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
           </div>
         </div>
 
-        {/* 右側：視覺化課表 (保持不變) */}
+        {/* 右側：視覺化課表 */}
         <div className="lg:w-2/3 flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100 gap-4">
+          <div className="flex flex-col sm:flex-row justify-between items-center bg-[var(--card-bg)] p-4 rounded-2xl shadow-sm border border-[var(--border-color)] gap-4">
              <div className="flex items-center gap-6">
-                <div className="flex items-baseline gap-2"><span className="text-sm font-bold text-gray-500">預排總學分</span><span className="text-2xl font-bold text-gray-900">{totalVisibleCredits}</span></div>
-                <div className="flex items-center gap-4 border-l border-gray-200 pl-6">
-                  <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer hover:text-black transition"><input type="checkbox" checked={showTimeDetail} onChange={e => setShowTimeDetail(e.target.checked)} className="rounded text-black focus:ring-0 cursor-pointer w-4 h-4" />顯示時間</label>
-                  <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer hover:text-black transition"><input type="checkbox" checked={showWeekend} onChange={e => setShowWeekend(e.target.checked)} className="rounded text-black focus:ring-0 cursor-pointer w-4 h-4" />顯示週末</label>
+                <div className="relative">
+                  <select 
+                    value={selectedSemester}
+                    onChange={(e) => setSelectedSemester(e.target.value)}
+                    className="appearance-none bg-[var(--hover-bg)] border-none font-bold text-[var(--main-text)] py-2 pl-4 pr-10 rounded-xl focus:ring-2 focus:ring-[var(--accent-color)] cursor-pointer"
+                  >
+                    <option value="1132">1132 學期</option>
+                    <option value="1131">1131 學期</option>
+                  </select>
+                  <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-[var(--sub-text)] pointer-events-none" />
+                </div>
+
+                <div className="flex items-baseline gap-2"><span className="text-sm font-bold text-[var(--sub-text)]">學分</span><span className="text-2xl font-bold text-[var(--main-text)]">{totalVisibleCredits}</span></div>
+                <div className="hidden sm:flex items-center gap-4 border-l border-[var(--border-color)] pl-6">
+                  <label className="flex items-center gap-2 text-xs font-bold text-[var(--sub-text)] cursor-pointer hover:text-[var(--main-text)] transition"><input type="checkbox" checked={showTimeDetail} onChange={e => setShowTimeDetail(e.target.checked)} className="rounded accent-[var(--accent-bg)] cursor-pointer w-4 h-4" />顯示時間</label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-[var(--sub-text)] cursor-pointer hover:text-[var(--main-text)] transition"><input type="checkbox" checked={showWeekend} onChange={e => setShowWeekend(e.target.checked)} className="rounded accent-[var(--accent-bg)] cursor-pointer w-4 h-4" />顯示週末</label>
                 </div>
              </div>
-             <button onClick={handleExportImage} className="flex items-center gap-2 bg-black text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-gray-800 transition active:scale-95"><Download className="w-4 h-4" /> 匯出課表圖片</button>
+             <button onClick={handleExportImage} className="flex items-center gap-2 bg-[var(--accent-bg)] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:opacity-90 transition active:scale-95"><Download className="w-4 h-4" /> 匯出課表圖片</button>
           </div>
 
-          <div className="flex-1 bg-white rounded-3xl shadow-sm border border-gray-100 p-6 overflow-hidden flex flex-col relative">
-            <div className="flex-1 overflow-auto" ref={scheduleRef}>
-              <div className="w-full h-full min-w-[600px]"> 
-                <div className={`grid gap-1 mb-2`} style={{ gridTemplateColumns: `3rem repeat(${displayDays.length}, 1fr)` }}>
-                  <div className="text-center text-xs font-bold text-gray-300 py-2">節次</div>
-                  {displayDays.map(day => <div key={day} className="text-center font-bold text-gray-600 text-sm bg-gray-50 rounded-lg py-2">{day}</div>)}
-                </div>
-                <div className={`grid gap-1 auto-rows-fr`} style={{ gridTemplateColumns: `3rem repeat(${displayDays.length}, 1fr)` }}>
-                  {Array.from({ length: 14 }, (_, i) => i + 1).map(period => (
-                    <>
-                      <div key={`p-${period}`} className="flex flex-col items-center justify-center text-xs text-gray-400 font-mono h-24 border-t border-gray-50"><span className="font-bold text-sm text-gray-600">{period}</span>{showTimeDetail && <span className="scale-75 opacity-70 mt-1">{timeMap[period]}</span>}</div>
-                      {displayDays.map((_, dayIndex) => {
-                        const currentDay = dayIndex + 1
-                        const activeCourses = courses.filter(c => {
-                          if (c.isHidden) return false
-                          const { day, periods } = parseTime(c.time)
-                          return day === currentDay && periods.includes(period)
-                        })
-                        const isConflict = activeCourses.length > 1
-                        const isHovered = hoverSlot?.day === currentDay && hoverSlot?.period === period
-                        const isSelected = selectedSlot?.day === currentDay && selectedSlot?.period === period
+          <div className="flex-1 bg-[var(--card-bg)] rounded-3xl shadow-sm border border-[var(--border-color)] p-6 overflow-hidden flex flex-col relative">
+            <div className="flex-1 overflow-auto">
+                <div className="w-full min-w-[600px] h-full" ref={scheduleRef}>
+                  <div className="bg-[var(--card-bg)] p-2">
+                    <div className={`grid gap-1 mb-2`} style={{ gridTemplateColumns: `3rem repeat(${displayDays.length}, 1fr)` }}>
+                      <div className="text-center text-xs font-bold text-[var(--sub-text)] py-2">節次</div>
+                      {displayDays.map(day => <div key={day} className="text-center font-bold text-[var(--main-text)] text-sm bg-[var(--hover-bg)] rounded-lg py-2">{day}</div>)}
+                    </div>
+                    <div className={`grid gap-1 auto-rows-fr`} style={{ gridTemplateColumns: `3rem repeat(${displayDays.length}, 1fr)` }}>
+                      {Array.from({ length: 14 }, (_, i) => i + 1).map(period => (
+                        <>
+                          <div key={`p-${period}`} className="flex flex-col items-center justify-center text-xs text-[var(--sub-text)] font-mono h-24 border-t border-[var(--border-color)]"><span className="font-bold text-sm text-[var(--main-text)]">{period}</span>{showTimeDetail && <span className="scale-75 opacity-70 mt-1">{timeMap[period]}</span>}</div>
+                          {displayDays.map((_, dayIndex) => {
+                            const currentDay = dayIndex + 1
+                            const activeCourses = currentSemesterCourses.filter(c => {
+                              if (c.isHidden) return false
+                              const { day, periods } = parseTime(c.time)
+                              return day === currentDay && periods.includes(period)
+                            })
+                            const isConflict = activeCourses.length > 1
+                            const isHovered = hoverSlot?.day === currentDay && hoverSlot?.period === period
+                            const isSelected = selectedSlot?.day === currentDay && selectedSlot?.period === period
 
-                        return (
-                          <div 
-                            key={`${period}-${currentDay}`} 
-                            className={`relative border-t h-24 p-1 group transition cursor-pointer
-                              ${isSelected ? 'bg-blue-50/30 border-blue-200' : 'border-gray-50 hover:bg-gray-50/50'}
-                            `}
-                            onMouseEnter={() => setHoverSlot({ day: currentDay, period })}
-                            onMouseLeave={() => setHoverSlot(null)}
-                            onClick={() => handleSlotClick(currentDay, period)}
-                          >
-                            {/* 智能選課提示圖示 */}
-                            {activeCourses.length === 0 && (isHovered || isSelected) && (
-                              <div className={`absolute inset-0 flex items-center justify-center transition animate-fade-in ${isSelected ? 'text-blue-200' : 'text-gray-200'}`}>
-                                <Plus className="w-6 h-6" />
-                              </div>
-                            )}
-
-                            <div className="w-full h-full flex gap-1">
-                              {activeCourses.map((course) => {
-                                const colorClass = getCourseColor(course.type, isConflict)
-                                return (
-                                  <div key={course.id} className={`flex-1 rounded-xl p-2 flex flex-col justify-center text-center text-[11px] leading-tight hover:scale-[1.02] hover:shadow-md transition duration-200 border relative overflow-hidden ${colorClass}`} title={`${course.name} (${course.teacher})\n${course.location}`}>
-                                    <div className="font-bold truncate w-full mb-0.5">{course.name}</div>
-                                    <div className="truncate opacity-80 scale-90">{course.location}</div>
-                                    {isConflict && <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full animate-pulse m-1"></div>}
+                            return (
+                              <div 
+                                key={`${period}-${currentDay}`} 
+                                className={`relative border-t h-24 p-1 group transition cursor-pointer
+                                  ${isSelected ? 'bg-blue-100/20 border-blue-300/50' : 'border-[var(--border-color)] hover:bg-[var(--hover-bg)]'}
+                                `}
+                                onMouseEnter={() => setHoverSlot({ day: currentDay, period })}
+                                onMouseLeave={() => setHoverSlot(null)}
+                                onClick={() => handleSlotClick(currentDay, period)}
+                              >
+                                {activeCourses.length === 0 && (isHovered || isSelected) && (
+                                  <div className={`absolute inset-0 flex items-center justify-center transition animate-fade-in text-[var(--sub-text)]`}>
+                                    <Plus className="w-6 h-6" />
                                   </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </>
-                  ))}
-                </div>
+                                )}
+
+                                <div className="w-full h-full flex gap-1">
+                                  {activeCourses.map((course) => {
+                                    const colorClass = getCourseColor(course.type, isConflict)
+                                    return (
+                                      <div key={course.id} className={`flex-1 rounded-xl p-2 flex flex-col justify-center text-center text-[11px] leading-tight hover:scale-[1.02] hover:shadow-md transition duration-200 border relative overflow-hidden ${colorClass}`} title={`${course.name} (${course.teacher})\n${course.location}`}>
+                                        <div className="font-bold truncate w-full mb-0.5">{course.name}</div>
+                                        <div className="truncate opacity-80 scale-90">{course.location}</div>
+                                        {isConflict && <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full animate-pulse m-1"></div>}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </>
+                      ))}
+                    </div>
+                  </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 刪除確認彈窗 */}
       {deleteTarget && (
         <ConfirmModal 
           title="移除課程"
