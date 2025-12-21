@@ -8,5 +8,5 @@ router.get('/history', ForumController.getHistory);
 // POST /api/forum/post (之後 DiscussionModal 用)
 router.post('/post', ForumController.createPost);
 router.get('/course/:courseId', ForumController.getCoursePosts);
-
+router.delete('/:id', ForumController.deletePost);
 module.exports = router;

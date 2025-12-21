@@ -8,6 +8,8 @@ require('dotenv').config();
 const importRoute = require('./routes/importRoute');
 const cartRoutes = require('./routes/cartRoutes');
 const forumRoutes = require('./routes/forumRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -20,6 +22,8 @@ app.use('/api/courses', courseRoutes);
 app.use('/api/quick-import', importRoute);
 app.use('/api/cart', cartRoutes);
 app.use('/api/forum', forumRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/users', require('./routes/userRoutes'));
 createTables().then(() => {
     app.listen(port, () => {
         console.log(`🚀 Server is running on port ${port}`);

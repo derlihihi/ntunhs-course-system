@@ -382,8 +382,8 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                     onChange={(e) => setSelectedSemester(e.target.value)}
                     className="appearance-none bg-[var(--hover-bg)] border-none font-bold text-[var(--main-text)] py-2 pl-4 pr-10 rounded-xl focus:ring-2 focus:ring-[var(--accent-color)] cursor-pointer"
                   >
-                    <option value="1132">1142 學期</option>
-                    <option value="1132">1141 學期</option>
+                    <option value="1142">1142 學期</option>
+                    <option value="1141">1141 學期</option>
                     <option value="1132">1132 學期</option>
                     <option value="1131">1131 學期</option>
                   </select>

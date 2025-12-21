@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Map as MapIcon, X } from 'lucide-react'
 
-// 引入拆分後的元件，注意這裡引入了新定義的 THEMES 和 Theme 型別
+// 引入元件
 import Header, { THEMES, Theme } from '../components/Header'
 import CourseSearch from '../components/CourseSearch'
 import CartDrawer from '../components/CartDrawer'
@@ -25,11 +25,12 @@ export default function Home() {
   const [cartItems, setCartItems] = useState<any[]>([])
   const [mapLocation, setMapLocation] = useState<string | null>(null)
   const [selectedDiscussionCourse, setSelectedDiscussionCourse] = useState<any>(null)
+  
   const [user, setUser] = useState<any>(null) 
   const [isAuthOpen, setIsAuthOpen] = useState(false)
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
 
-  // 🔥 新增：主題顏色狀態 (預設第一個)
+  // 主題顏色狀態
   const [currentTheme, setCurrentTheme] = useState<Theme>(THEMES[0])
 
   // ============================================
@@ -48,8 +49,11 @@ export default function Home() {
     }
   };
 
+  // 🔥 修正：增加判斷，如果 user.role 是 admin 就不去抓購物車 (防止 ID 型別錯誤)
   useEffect(() => {
-    if (user?.id && user.role !== 'admin') { 
+    const isAdmin = user && (user.role === 'admin' || user.role === 0 || user.role === '0');
+    
+    if (user?.id && !isAdmin) { 
       fetchCart(user.id);
     } else {
       setCartItems([]);
@@ -75,8 +79,11 @@ export default function Home() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id, courseId: course.id })
         });
+        
+        // 處理後端回傳 (例如重複加入)
+        const data = await res.json();
         if (res.ok) fetchCart(user.id);
-        else alert('加入失敗，可能重複加入或系統錯誤');
+        else alert(data.message || '加入失敗');
       }
     } catch (error) {
       console.error('操作失敗:', error);
@@ -101,6 +108,7 @@ export default function Home() {
     localStorage.removeItem('user');
   }
 
+  // 初始化讀取使用者
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
@@ -113,18 +121,21 @@ export default function Home() {
     }
   }, []);
 
-  // 路由判斷：如果是管理員，直接渲染 AdminDashboard
-  if (user?.role === 'admin') {
+  // ==========================================
+  // 🔥 路由判斷：如果是管理員，直接渲染 AdminDashboard
+  // ==========================================
+  const isAdmin = user && (user.role === 'admin' || user.role === 0 || user.role === '0');
+
+  if (isAdmin) {
     return <AdminDashboard user={user} onLogout={handleLogoutConfirm} />
   }
 
   // --- 學生/訪客視圖 ---
   return (
-    // 🔥 關鍵修改：將主題色定義為 CSS 變數，注入到最外層 div
     <div 
       className="min-h-screen flex flex-col font-sans transition-colors duration-500 bg-[var(--app-bg)] text-[var(--main-text)] selection:bg-[var(--accent-bg)] selection:text-[var(--accent-text)]"
       style={{
-        // @ts-ignore - 忽略 TypeScript 對自定義 CSS 屬性的檢查
+        // @ts-ignore
         '--app-bg': currentTheme.colors.appBg,
         '--header-bg': currentTheme.colors.headerBg,
         '--card-bg': currentTheme.colors.cardBg,
@@ -145,14 +156,12 @@ export default function Home() {
         user={user}
         onOpenLogin={() => setIsAuthOpen(true)}
         onLogout={() => setIsLogoutModalOpen(true)}
-        // 傳遞主題狀態給 Header
         currentTheme={currentTheme}
         setTheme={setCurrentTheme}
       />
 
       <main className="flex-1 max-w-[1440px] mx-auto w-full pt-8 px-4 md:px-8 pb-20 animate-fade-in-up">
         
-        {/* 注意：為了讓 CourseSearch 裡面的白色區塊也變色，你需要修改 CourseSearch.tsx */}
         {activeTab === '課程查詢' && (
           <CourseSearch 
             cartItems={cartItems}
@@ -182,7 +191,7 @@ export default function Home() {
 
       </main>
 
-      {/* 右側購物車 (這裡也需要修改內部樣式才能完全適配主題) */}
+      {/* 右側購物車 */}
       <CartDrawer 
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
@@ -202,7 +211,7 @@ export default function Home() {
       {selectedDiscussionCourse && (
         <DiscussionModal 
            course={selectedDiscussionCourse} 
-           user={user} 
+           user={user}
            onClose={() => setSelectedDiscussionCourse(null)} 
         />
       )}
@@ -211,7 +220,6 @@ export default function Home() {
         <AuthModal onClose={() => setIsAuthOpen(false)} onLoginSuccess={setUser} />
       )}
 
-      {/* 登出確認彈窗 */}
       {isLogoutModalOpen && (
         <ConfirmModal 
           title="確認登出"

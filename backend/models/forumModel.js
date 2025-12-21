@@ -49,6 +49,10 @@ class ForumModel {
         const { rows } = await pool.query(query, [courseId]);
         return rows;
     }
+    static async deletePost(id) {
+        const query = `DELETE FROM forum_posts WHERE id = $1`;
+        await pool.query(query, [id]);
+    }
 }
 
 module.exports = ForumModel;

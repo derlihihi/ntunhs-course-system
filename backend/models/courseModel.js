@@ -119,6 +119,176 @@ class CourseModel {
         const { rows } = await pool.query(query, [id]);
         return rows[0];
     }
+    static async createCourse(data) {
+        const query = `
+            INSERT INTO courses (
+                year_term, course_code, course_name, department, 
+                grade, class_group, teacher, credits, 
+                day_of_week, period_raw, location, 
+                course_type, note, max_students
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            RETURNING *
+        `;
+        
+        const values = [
+            data.semester,      // 1132
+            data.id,            // 科目代碼 (注意：前端傳來的 key 可能是 id 或 courseCode)
+            data.name,          // 課程名稱
+            data.department,    // 系所
+            data.grade,         // 年級
+            data.classGroup || '', // 班組
+            data.teacher,       // 教師
+            parseInt(data.credits), 
+            data.day,           // 週一
+            data.periods,       // 02,03,04 (原始字串)
+            data.location,
+            data.type,          // 必修/選修
+            data.note || '',    // 備註
+            parseInt(data.capacity || 60) // 人數上限
+        ];
+
+        const { rows } = await pool.query(query, values);
+        return rows[0];
+    }
+static async updateCourse(id, data) {
+        // 使用 id (資料庫 PK) 來更新
+        // 注意：這裡假設前端傳來的 id 是資料庫的 primary key (例如 1, 2, 3)
+        // 如果是用課程代碼更新，要把 WHERE id = $15 改成 WHERE course_code = $15
+        
+        const query = `
+            UPDATE courses 
+            SET 
+                year_term = $1, 
+                course_code = $2, 
+                course_name = $3, 
+                department = $4, 
+                grade = $5, 
+                class_group = $6, 
+                teacher = $7, 
+                credits = $8, 
+                day_of_week = $9, 
+                period_raw = $10, 
+                location = $11, 
+                course_type = $12, 
+                current_students = $13,
+                max_students = $14
+            WHERE id = $15
+            RETURNING *
+        `;
+        
+        const values = [
+            data.semester,
+            data.courseCode, // 課程代碼 (例如 "0058")
+            data.name,
+            data.department,
+            data.grade,
+            data.classGroup,
+            data.teacher,
+            parseInt(data.credits),
+            data.day,
+            data.periods,
+            data.location,
+            data.type,
+            parseInt(data.currentStudents),
+            parseInt(data.maxStudents),
+            id // WHERE 條件
+        ];
+
+        const { rows } = await pool.query(query, values);
+        return rows[0];
+    }
+    static async deleteCourse(id) {
+    const query = `DELETE FROM courses WHERE id = $1`;
+    await pool.query(query, [id]);
+}
+static async importCourses(coursesData) {
+        const client = await pool.connect();
+        let successCount = 0;
+        let skippedCount = 0;
+
+        try {
+            await client.query('BEGIN'); // 開啟交易
+
+            for (const course of coursesData) {
+                // 1. 檢查必填欄位 (後端再防呆一次)
+                if (!course.id || !course.name) {
+                    skippedCount++;
+                    continue;
+                }
+
+                // 2. 嘗試用 ID 找舊資料
+                // 注意：這裡假設 course.id 對應資料庫的 course_code (如果是 PK 則是 id)
+                // 根據你的 CSV，course.id 應該是 'course_code' (例如 0058)
+                const checkQuery = `SELECT * FROM courses WHERE course_code = $1`;
+                const { rows } = await client.query(checkQuery, [course.id]);
+                const existing = rows[0];
+
+                // 準備要寫入的欄位 (這裡要跟資料庫欄位對齊)
+                const newValues = [
+                    course.semester || '', 
+                    course.id, 
+                    course.name, 
+                    course.department || '', 
+                    course.grade || '', 
+                    course.classGroup || '', 
+                    course.teacher || '', 
+                    parseInt(course.credits) || 0, 
+                    course.time ? course.time.split('/')[0].trim() : '', // day
+                    course.time ? course.time.split('/')[1]?.trim() || '' : '', // periods
+                    course.location || '', 
+                    course.type || '',
+                    60 // 預設人數上限
+                ];
+
+                if (existing) {
+                    // 3. 比對內容是否完全一樣 (這裡就是你要求的邏輯)
+                    // 我們把新舊資料都轉成字串來比對關鍵欄位
+                    // 注意：資料庫取出的欄位名稱是 snake_case
+                    const isIdentical = 
+                        existing.course_name === course.name &&
+                        existing.teacher === course.teacher &&
+                        existing.credits === (parseInt(course.credits) || 0) &&
+                        // ... 其他你想比對的欄位 ...
+                        true; // 簡化示範
+
+                    if (isIdentical) {
+                        skippedCount++;
+                        continue; // 完全一樣就跳過
+                    }
+
+                    // 4. 不一樣 -> UPDATE (更新)
+                    const updateQuery = `
+                        UPDATE courses SET 
+                            year_term=$1, course_name=$3, department=$4, grade=$5, class_group=$6, 
+                            teacher=$7, credits=$8, day_of_week=$9, period_raw=$10, location=$11, course_type=$12,max_students=$13
+                        WHERE course_code = $2
+                    `;
+                    await client.query(updateQuery, newValues);
+                    successCount++;
+
+                } else {
+                    // 5. 沒找到 -> INSERT (新增)
+                    const insertQuery = `
+                        INSERT INTO courses (
+                            year_term, course_code, course_name, department, grade, class_group, 
+                            teacher, credits, day_of_week, period_raw, location, course_type, max_students
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                    `;
+                    await client.query(insertQuery, newValues);
+                    successCount++;
+                }
+            }
+
+            await client.query('COMMIT'); // 提交交易
+            return { success: successCount, skipped: skippedCount };
+
+        } catch (e) {
+            await client.query('ROLLBACK'); // 發生錯誤全部復原
+            throw e;
+        } finally {
+            client.release();
+        }
+    }
 }
 
 module.exports = CourseModel;

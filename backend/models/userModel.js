@@ -31,6 +31,16 @@ class UserModel {
         const { rows } = await pool.query(query, [id]);
         return rows[0];
     }
+    static async updateStatus(id, status) {
+        const query = `
+            UPDATE users 
+            SET status = $1 
+            WHERE id = $2
+            RETURNING id, name, status
+        `;
+        const { rows } = await pool.query(query, [status, id]);
+        return rows[0];
+    }
 }
 
 module.exports = UserModel;

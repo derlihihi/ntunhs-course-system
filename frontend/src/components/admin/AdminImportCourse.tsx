@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Upload, FileJson, CheckCircle, XCircle, X } from 'lucide-react'
+import { Upload, FileJson, CheckCircle, XCircle, X, Loader2 } from 'lucide-react'
 
 interface AdminImportCourseProps {
   currentCourses: any[]
@@ -10,24 +10,8 @@ interface AdminImportCourseProps {
 
 export default function AdminImportCourse({ currentCourses, onImport }: AdminImportCourseProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  
-  // 結果彈窗的狀態
+  const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<{ success: number; skipped: number; total: number } | null>(null)
-
-  // 比較兩個課程物件是否「內容完全一樣」
-  const isContentIdentical = (courseA: any, courseB: any) => {
-    // 這裡列出你想要比對的欄位，如果全部欄位都要比，可以直接用 JSON.stringify
-    // 為了精準，我們比對關鍵欄位即可
-    return (
-      courseA.name === courseB.name &&
-      courseA.teacher === courseB.teacher &&
-      courseA.credits === courseB.credits &&
-      courseA.time === courseB.time &&
-      courseA.location === courseB.location &&
-      courseA.department === courseB.department &&
-      courseA.type === courseB.type
-    )
-  }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -35,7 +19,8 @@ export default function AdminImportCourse({ currentCourses, onImport }: AdminImp
 
     const reader = new FileReader()
     
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
+      setIsLoading(true)
       try {
         const jsonString = event.target?.result as string
         const importData = JSON.parse(jsonString)
@@ -45,56 +30,39 @@ export default function AdminImportCourse({ currentCourses, onImport }: AdminImp
           return
         }
 
-        let successCount = 0
-        let skippedCount = 0
-        
-        // 複製一份目前的課程，用來進行修改
-        let nextCourses = [...currentCourses]
+        // 🔥 關鍵修改：直接將整包資料 POST 給後端處理
+        const res = await fetch('http://localhost:8000/api/courses/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(importData)
+        });
 
-        importData.forEach((newCourse: any) => {
-          // 1. 檢查必填欄位 (簡單防呆)
-          if (!newCourse.id || !newCourse.name) {
-            skippedCount++
-            return
-          }
+        const data = await res.json();
 
-          // 2. 尋找是否已存在相同 ID 的課程
-          const existingIndex = nextCourses.findIndex(c => c.id === newCourse.id)
+        if (res.ok) {
+            // 設定結果彈窗
+            setResult({
+                success: data.result.success,
+                skipped: data.result.skipped,
+                total: importData.length
+            });
 
-          if (existingIndex === -1) {
-            // A. 不存在 -> 直接新增
-            nextCourses.push(newCourse)
-            successCount++
-          } else {
-            // B. 已存在 -> 比對內容
-            const existingCourse = nextCourses[existingIndex]
+            // 為了保持前端資料一致，這裡建議重新 fetch 一次全部課程
+            // 或是這裡簡單一點，把新資料合併進去 (如果後端有回傳新資料的話)
+            // 這裡我們先用簡單的 alert 提示重新整理
+            alert('匯入完成！請重新整理頁面以查看最新資料。');
             
-            if (isContentIdentical(existingCourse, newCourse)) {
-              // 內容完全一樣 -> 跳過
-              skippedCount++
-            } else {
-              // 內容不一樣 -> 更新 (覆蓋)
-              nextCourses[existingIndex] = newCourse
-              successCount++
-            }
-          }
-        })
-
-        // 更新父層資料
-        onImport(nextCourses)
-        
-        // 設定彈窗結果
-        setResult({
-          success: successCount,
-          skipped: skippedCount,
-          total: importData.length
-        })
+            // 如果你的 Dashboard 有提供 refetch 的機制，這裡可以呼叫
+            // onImport([]); // 這裡先傳空，因為邏輯在後端跑完了
+        } else {
+            alert(data.message || '匯入失敗');
+        }
 
       } catch (error) {
         console.error(error)
-        alert('匯入失敗：檔案格式不正確或損毀')
+        alert('匯入失敗：檔案格式不正確或連線錯誤')
       } finally {
-        // 清空 input，這樣下次選同一個檔案才會觸發 onChange
+        setIsLoading(false)
         if (fileInputRef.current) {
           fileInputRef.current.value = ''
         }
@@ -107,7 +75,16 @@ export default function AdminImportCourse({ currentCourses, onImport }: AdminImp
   return (
     <>
       <div className="max-w-2xl mx-auto py-10 animate-fade-in-up">
-        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-10 text-center">
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-10 text-center relative">
+          
+          {/* Loading 遮罩 */}
+          {isLoading && (
+             <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-3xl">
+                <Loader2 className="w-10 h-10 animate-spin text-blue-500 mb-2" />
+                <p className="text-gray-500 font-bold">正在處理大量資料，請稍候...</p>
+             </div>
+          )}
+
           <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6 text-blue-500">
             <Upload className="w-10 h-10" />
           </div>
@@ -121,9 +98,10 @@ export default function AdminImportCourse({ currentCourses, onImport }: AdminImp
             <input 
               ref={fileInputRef}
               type="file" 
-              accept=".json" // 改成 json
+              accept=".json" 
               onChange={handleFileUpload} 
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+              disabled={isLoading}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 disabled:cursor-not-allowed" 
             />
             <div className="border-2 border-dashed border-gray-300 rounded-2xl p-10 group-hover:border-black group-hover:bg-gray-50 transition">
               <div className="flex flex-col items-center gap-3">
@@ -138,7 +116,7 @@ export default function AdminImportCourse({ currentCourses, onImport }: AdminImp
           
           <div className="mt-8 flex justify-center gap-4">
             <button 
-              onClick={() => alert('範例格式：\n[\n  {\n    "id": "001",\n    "name": "程式設計",\n    "teacher": "王大明",\n    ...\n  }\n]')}
+              onClick={() => alert('範例格式：\n[\n  {\n    "id": "0058",\n    "name": "程式設計",\n    "time": "週一 / 02,03",\n    ...\n  }\n]')}
               className="text-sm text-gray-500 underline hover:text-black transition"
             >
               查看 JSON 格式範例
@@ -147,7 +125,7 @@ export default function AdminImportCourse({ currentCourses, onImport }: AdminImp
         </div>
       </div>
 
-      {/* 匯入結果彈窗 */}
+      {/* 匯入結果彈窗 (保持原樣) */}
       {result && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center px-4 animate-fade-in-up">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-md" onClick={() => setResult(null)}></div>

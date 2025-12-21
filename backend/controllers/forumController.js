@@ -61,6 +61,16 @@ class ForumController {
             res.status(500).json({ message: '取得留言失敗' });
         }
     }
+    static async deletePost(req, res) {
+        try {
+            const { id } = req.params;
+            await ForumModel.deletePost(id);
+            res.json({ message: '留言已刪除' });
+        } catch (error) {
+            console.error('Delete post error:', error);
+            res.status(500).json({ message: '刪除失敗' });
+        }
+    }
 }
 
 module.exports = ForumController;

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, Ban, CheckCircle, AlertCircle } from 'lucide-react'
+import { Search, Ban, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 
 interface AdminUserManageProps {
   users: any[]
@@ -9,23 +9,54 @@ interface AdminUserManageProps {
 }
 
 export default function AdminUserManage({ users, setUsers }: AdminUserManageProps) {
-  // 1. 搜尋關鍵字狀態
   const [searchTerm, setSearchTerm] = useState('')
+  const [loadingId, setLoadingId] = useState<string | null>(null) // 控制個別按鈕的 loading
 
-  // 2. 停權/解鎖邏輯
-  const toggleUserBan = (id: string) => {
-    setUsers(users.map(u => u.id === id ? { ...u, status: u.status === 'normal' ? 'banned' : 'normal' } : u))
+  // 🔥 關鍵修改：停權/解鎖邏輯 (打 API)
+  const toggleUserBan = async (user: any) => {
+    // 防止重複點擊
+    if (loadingId) return;
+    
+    setLoadingId(user.id);
+    
+    // 計算新狀態
+    const newStatus = user.status === 'banned' ? 'normal' : 'banned';
+
+    try {
+        const res = await fetch(`http://localhost:8000/api/users/${user.id}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+        });
+
+        if (res.ok) {
+            // 更新本地列表
+            setUsers(users.map(u => 
+                u.id === user.id ? { ...u, status: newStatus } : u
+            ));
+        } else {
+            alert('更新失敗');
+        }
+    } catch (error) {
+        console.error('Update status error:', error);
+        alert('連線錯誤');
+    } finally {
+        setLoadingId(null);
+    }
   }
 
-  // 3. 過濾邏輯 (支援學號、姓名、系所)
-  const filteredUsers = users.filter(u => 
-    u.id.includes(searchTerm) || 
-    u.name.includes(searchTerm) || 
-    u.department.includes(searchTerm)
-  )
+  // 過濾邏輯 (支援學號、姓名、系所)
+  // 注意：這裡假設後端回傳的欄位有 student_id
+  const filteredUsers = users.filter(u => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+        (u.student_id && u.student_id.toString().includes(searchLower)) || // 搜尋學號
+        (u.name && u.name.toLowerCase().includes(searchLower)) ||          // 搜尋姓名
+        (u.department && u.department.toLowerCase().includes(searchLower)) // 搜尋系所
+    );
+  })
 
   return (
-    // 修改：限制最大寬度為 4xl (約 896px)，並置中
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in-up">
       
       {/* 搜尋區塊 */}
@@ -66,7 +97,8 @@ export default function AdminUserManage({ users, setUsers }: AdminUserManageProp
             {filteredUsers.length > 0 ? (
               filteredUsers.map(u => (
                 <tr key={u.id} className="hover:bg-gray-50 transition group">
-                  <td className="p-5 pl-8 font-mono text-gray-600">{u.id}</td>
+                  {/* 注意：這裡顯示 student_id 而不是 database id */}
+                  <td className="p-5 pl-8 font-mono text-gray-600">{u.student_id}</td>
                   <td className="p-5 font-bold text-gray-900">{u.name}</td>
                   <td className="p-5 text-gray-500">{u.department}</td>
                   <td className="p-5 text-center">
@@ -82,14 +114,21 @@ export default function AdminUserManage({ users, setUsers }: AdminUserManageProp
                   </td>
                   <td className="p-5 text-center">
                     <button 
-                      onClick={() => toggleUserBan(u.id)} 
-                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition border shadow-sm active:scale-95
+                      onClick={() => toggleUserBan(u)} 
+                      disabled={loadingId === u.id}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition border shadow-sm active:scale-95 flex items-center justify-center gap-1 mx-auto min-w-[80px]
                         ${u.status === 'banned' 
                           ? 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50' 
                           : 'bg-white border-red-200 text-red-500 hover:bg-red-50'
-                        }`}
+                        }
+                        ${loadingId === u.id ? 'opacity-50 cursor-not-allowed' : ''}
+                      `}
                     >
-                      {u.status === 'banned' ? '解除封鎖' : '禁止發言'}
+                      {loadingId === u.id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                          u.status === 'banned' ? '解除封鎖' : '禁止發言'
+                      )}
                     </button>
                   </td>
                 </tr>

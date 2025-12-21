@@ -67,13 +67,13 @@ export default function MapModal({ location, onClose }: MapModalProps) {
                  </div>
                  
                  {/* 真實圖片寫法範例 (請解開註解並準備圖片): */}
-                 {/* <Image 
+                 { <Image 
                    src={`/maps/${buildingCode}.png`} 
                    alt={`${buildingName}位置圖`}
                    fill
                    className="object-contain p-4"
                  /> 
-                 */}
+                 }
               </div>
             </div>
           ) : (
