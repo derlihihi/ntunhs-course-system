@@ -37,31 +37,27 @@ const getCourseColor = (type: string, isConflict: boolean) => {
 export default function PreSelection({ initialCourses, user, onRemoveFromGlobalCart, onOpenLogin, onAddCourse }: PreSelectionProps) {
   const [courses, setCourses] = useState<Course[]>([])
   const [selectedSemester, setSelectedSemester] = useState('1132')
+  
+  // 綁定要截圖的容器 (包含標題和內容)
   const scheduleRef = useRef<HTMLDivElement>(null)
   
   const [showWeekend, setShowWeekend] = useState(false)
   const [showTimeDetail, setShowTimeDetail] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<Course | null>(null)
   const [hoverSlot, setHoverSlot] = useState<{day: number, period: number} | null>(null)
-  
-  // 這個狀態控制左側是否顯示「推薦課程」，我們需要將它存入 Cookie
   const [selectedSlot, setSelectedSlot] = useState<{day: number, period: number} | null>(null)
   
   const [recommendations, setRecommendations] = useState<Course[]>([])
   const [isLoadingRecs, setIsLoadingRecs] = useState(false)
-  
-  // 匯出按鈕 Loading 狀態
   const [isExporting, setIsExporting] = useState(false)
-  
-  // 初始化標記
   const [isInitialized, setIsInitialized] = useState(false)
 
-  // 1. 初始化：讀取 Cookies (包含推薦課程的狀態 selectedSlot)
+  // 1. 初始化：讀取 Cookies
   useEffect(() => {
     const savedSemester = Cookies.get('pre_selected_semester')
     const savedShowWeekend = Cookies.get('pre_show_weekend')
     const savedShowTimeDetail = Cookies.get('pre_show_time_detail')
-    const savedSelectedSlot = Cookies.get('pre_selected_slot') // 讀取選中的格子
+    const savedSelectedSlot = Cookies.get('pre_selected_slot') 
 
     if (savedSemester) setSelectedSemester(savedSemester)
     if (savedShowWeekend) setShowWeekend(savedShowWeekend === 'true')
@@ -86,7 +82,6 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
       Cookies.set('pre_show_weekend', String(showWeekend), { expires: 7 })
       Cookies.set('pre_show_time_detail', String(showTimeDetail), { expires: 7 })
       
-      // 如果有選中格子，就存起來；否則移除 Cookie
       if (selectedSlot) {
         Cookies.set('pre_selected_slot', JSON.stringify(selectedSlot), { expires: 7 })
       } else {
@@ -95,7 +90,6 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     }
   }, [selectedSemester, showWeekend, showTimeDetail, selectedSlot, isInitialized])
 
-  // 同步外部傳入的課程
   useEffect(() => {
     setCourses(prev => {
       return initialCourses.map(newCourse => {
@@ -105,7 +99,6 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     })
   }, [initialCourses])
 
-  // 抓取推薦課程 (當 selectedSlot 恢復時，這裡會自動觸發，從而恢復推薦列表)
   useEffect(() => {
     const fetchRecommendations = async () => {
       if (!selectedSlot) return;
@@ -170,7 +163,6 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     )
   }
 
-  // --- 操作邏輯 ---
   const togglePin = (id: string) => {
     setCourses(prev => prev.map(c => c.id === id ? { ...c, isPinned: !c.isPinned } : c))
   }
@@ -197,31 +189,52 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
   const currentSemesterCourses = courses.filter(c => !c.semester || c.semester === selectedSemester);
   const totalVisibleCredits = currentSemesterCourses.filter(c => !c.isHidden).reduce((acc, c) => acc + c.credits, 0)
 
-  // 🔥 修正版圖片匯出函式
+  // 🔥 匯出圖片邏輯修正
   const handleExportImage = async () => {
     if (scheduleRef.current) {
       setIsExporting(true)
       try {
-        // 動態載入並處理 default export 問題
         const module = await import('html2canvas')
         const html2canvas = module.default || module
 
         const element = scheduleRef.current
         
+        // 取得實際內容寬度 (不含捲軸)
+        const contentWidth = element.scrollWidth
+        const contentHeight = element.scrollHeight
+
         const canvas = await html2canvas(element, {
           scale: 3, // 高解析度
           useCORS: true,
-          backgroundColor: '#ffffff', // 強制白底，避免透明或黑色
+          backgroundColor: '#ffffff',
           logging: false,
-          width: element.scrollWidth,
-          height: element.scrollHeight,
-          windowWidth: element.scrollWidth,
-          windowHeight: element.scrollHeight,
-          // 確保字型渲染
+          // 強制設定截圖尺寸為內容的實際大小
+          width: contentWidth,
+          height: contentHeight,
+          windowWidth: contentWidth,
+          windowHeight: contentHeight,
+          x: 0,
+          y: 0,
+          // 確保字型渲染與完整內容顯示
           onclone: (clonedDoc) => {
             const clonedElement = clonedDoc.getElementById('schedule-export-target')
             if (clonedElement) {
               clonedElement.style.fontFamily = 'inherit'
+              // 強制展開所有內容，避免截圖時有捲軸被截到
+              clonedElement.style.overflow = 'visible'
+              clonedElement.style.width = `${contentWidth}px`
+              clonedElement.style.height = `${contentHeight}px`
+              
+              // 移除所有 'truncate' class，讓文字完整顯示 (可能會換行，但至少不會被切掉)
+              const truncatedElements = clonedElement.querySelectorAll('.truncate')
+              truncatedElements.forEach(el => {
+                el.classList.remove('truncate')
+                el.classList.add('break-words') // 改用自動換行
+                // 如果是地點欄位，可能需要加大字體或顯示完整
+                if (el.classList.contains('scale-90')) {
+                    el.classList.remove('scale-90') // 移除縮放，避免模糊
+                }
+              })
             }
           }
         })
@@ -275,10 +288,9 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     <>
       <div className="flex flex-col lg:flex-row h-[calc(100vh-140px)] gap-6 animate-fade-in-up">
         
-        {/* 左側面板 */}
+        {/* 左側面板 (保持不變) */}
         <div className="lg:w-1/3 flex flex-col gap-4">
           <div className="flex-1 bg-[var(--card-bg)] rounded-3xl shadow-sm border border-[var(--border-color)] overflow-hidden flex flex-col transition-all duration-300">
-            
             {selectedSlot ? (
               // 模式 B：智能推薦列表
               <>
@@ -289,11 +301,8 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                       {selectedSemester} 週{['一','二','三','四','五','六','日'][selectedSlot.day-1]}第{selectedSlot.period}節 推薦
                     </h3>
                   </div>
-                  <button onClick={() => setSelectedSlot(null)} className="p-1.5 hover:bg-[var(--hover-bg)] rounded-full text-[var(--sub-text)] transition">
-                    <X className="w-4 h-4" />
-                  </button>
+                  <button onClick={() => setSelectedSlot(null)} className="p-1.5 hover:bg-[var(--hover-bg)] rounded-full text-[var(--sub-text)] transition"><X className="w-4 h-4" /></button>
                 </div>
-
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--hover-bg)]/30">
                   {isLoadingRecs ? (
                     <div className="flex flex-col items-center justify-center h-full text-[var(--sub-text)] space-y-2">
@@ -313,13 +322,7 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                             <p>{course.teacher} · {course.location}</p>
                             <p>{course.time} ({course.credits}學分)</p>
                           </div>
-                          
-                          <button 
-                            disabled={isAdded}
-                            onClick={() => { if (!isAdded) onAddCourse(course) }}
-                            className={`w-full mt-3 text-xs font-bold py-2 rounded-lg transition flex items-center justify-center gap-1
-                              ${isAdded ? 'bg-[var(--hover-bg)] text-[var(--sub-text)] cursor-not-allowed' : 'bg-[var(--accent-bg)] text-white hover:opacity-90 active:scale-95'}`}
-                          >
+                          <button disabled={isAdded} onClick={() => { if (!isAdded) onAddCourse(course) }} className={`w-full mt-3 text-xs font-bold py-2 rounded-lg transition flex items-center justify-center gap-1 ${isAdded ? 'bg-[var(--hover-bg)] text-[var(--sub-text)] cursor-not-allowed' : 'bg-[var(--accent-bg)] text-white hover:opacity-90 active:scale-95'}`}>
                             {isAdded ? <><Check className="w-3 h-3" /> 已選擇該課程</> : <><Plus className="w-3 h-3" /> 加入此課程</>}
                           </button>
                         </div>
@@ -407,17 +410,49 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
           </div>
 
           <div className="flex-1 bg-[var(--card-bg)] rounded-3xl shadow-sm border border-[var(--border-color)] p-6 overflow-hidden flex flex-col relative">
-            <div className="flex-1 overflow-auto">
-                <div className="w-full min-w-[600px] h-full" ref={scheduleRef} id="schedule-export-target">
+            
+            {/* 🔥 這裡我們只處理最外層的 overflow */}
+            <div className="flex-1 overflow-x-auto overflow-y-auto">
+                {/* 🔥 ID 用於截圖定位
+                   min-width: 確保表格不會因為螢幕小被擠壓
+                */}
+                <div className="w-full min-w-[700px] h-full" ref={scheduleRef} id="schedule-export-target">
                   <div className="bg-[var(--card-bg)] p-2 h-full">
-                    <div className={`grid gap-1 mb-2`} style={{ gridTemplateColumns: `3rem repeat(${displayDays.length}, 1fr)` }}>
-                      <div className="text-center text-xs font-bold text-[var(--sub-text)] py-2">節次</div>
-                      {displayDays.map(day => <div key={day} className="text-center font-bold text-[var(--main-text)] text-sm bg-[var(--hover-bg)] rounded-lg py-2">{day}</div>)}
-                    </div>
-                    <div className={`grid gap-1 auto-rows-fr`} style={{ gridTemplateColumns: `3rem repeat(${displayDays.length}, 1fr)` }}>
+                    
+                    {/* 🔥 修改重點：
+                       將標題 (星期幾) 與內容 (節次與課程) 放在同一個 Grid Container 中，
+                       這樣可以保證對齊永遠準確。
+                    */}
+                    <div className="grid gap-1 h-full auto-rows-fr" 
+                         style={{ 
+                           // 第一欄是節次，後面跟著星期幾
+                           gridTemplateColumns: `3rem repeat(${displayDays.length}, 1fr)`,
+                           // 第一列是標題，後面是 14 節課
+                           gridTemplateRows: `auto repeat(14, 1fr)`
+                         }}>
+
+                      {/* --- 1. 標題列 (Header Row) --- */}
+                      
+                      {/* 左上角空白格 */}
+                      <div className="text-center text-xs font-bold text-[var(--sub-text)] py-2 flex items-center justify-center bg-[var(--hover-bg)]/50 rounded-lg">節次</div>
+                      
+                      {/* 星期幾標題 */}
+                      {displayDays.map(day => (
+                        <div key={day} className="text-center font-bold text-[var(--main-text)] text-sm bg-[var(--hover-bg)] rounded-lg py-2 flex items-center justify-center">
+                          {day}
+                        </div>
+                      ))}
+
+                      {/* --- 2. 內容列 (Content Rows) --- */}
                       {Array.from({ length: 14 }, (_, i) => i + 1).map(period => (
                         <>
-                          <div key={`p-${period}`} className="flex flex-col items-center justify-center text-xs text-[var(--sub-text)] font-mono h-24 border-t border-[var(--border-color)]"><span className="font-bold text-sm text-[var(--main-text)]">{period}</span>{showTimeDetail && <span className="scale-75 opacity-70 mt-1">{timeMap[period]}</span>}</div>
+                          {/* 節次欄 (第一欄) */}
+                          <div key={`p-${period}`} className="flex flex-col items-center justify-center text-xs text-[var(--sub-text)] font-mono border-t border-[var(--border-color)] min-h-[5rem]">
+                            <span className="font-bold text-sm text-[var(--main-text)]">{period}</span>
+                            {showTimeDetail && <span className="scale-75 opacity-70 mt-1">{timeMap[period]}</span>}
+                          </div>
+
+                          {/* 課程格子 (後續欄位) */}
                           {displayDays.map((_, dayIndex) => {
                             const currentDay = dayIndex + 1
                             const activeCourses = currentSemesterCourses.filter(c => {
@@ -432,8 +467,8 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                             return (
                               <div 
                                 key={`${period}-${currentDay}`} 
-                                className={`relative border-t h-24 p-1 group transition cursor-pointer
-                                  ${isSelected ? 'bg-blue-100/20 border-blue-300/50' : 'border-[var(--border-color)] hover:bg-[var(--hover-bg)]'}
+                                className={`relative border-t border-l border-[var(--border-color)]/30 p-1 group transition cursor-pointer min-h-[5rem]
+                                  ${isSelected ? 'bg-blue-100/20 shadow-inner' : 'hover:bg-[var(--hover-bg)]'}
                                 `}
                                 onMouseEnter={() => setHoverSlot({ day: currentDay, period })}
                                 onMouseLeave={() => setHoverSlot(null)}
@@ -445,13 +480,14 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                                   </div>
                                 )}
 
-                                <div className="w-full h-full flex gap-1">
+                                <div className="w-full h-full flex gap-1 overflow-hidden">
                                   {activeCourses.map((course) => {
                                     const colorClass = getCourseColor(course.type, isConflict)
                                     return (
-                                      <div key={course.id} className={`flex-1 rounded-xl p-2 flex flex-col justify-center text-center text-[11px] leading-tight hover:scale-[1.02] hover:shadow-md transition duration-200 border relative overflow-hidden ${colorClass}`} title={`${course.name} (${course.teacher})\n${course.location}`}>
-                                        <div className="font-bold truncate w-full mb-0.5">{course.name}</div>
-                                        <div className="truncate opacity-80 scale-90">{course.location}</div>
+                                      <div key={course.id} className={`flex-1 rounded-xl p-1.5 flex flex-col justify-center text-center text-[11px] leading-tight hover:scale-[1.02] hover:shadow-md transition duration-200 border relative overflow-hidden ${colorClass}`} title={`${course.name} (${course.teacher})\n${course.location}`}>
+                                        {/* 🔥 樣式微調：防止文字被截斷 */}
+                                        <div className="font-bold w-full mb-0.5 truncate leading-snug">{course.name}</div>
+                                        <div className="opacity-90 scale-95 truncate">{course.location}</div>
                                         {isConflict && <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full animate-pulse m-1"></div>}
                                       </div>
                                     )

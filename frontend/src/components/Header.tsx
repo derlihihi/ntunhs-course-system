@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ShoppingCart, User, ChevronDown, LogOut, ShieldCheck, Palette, Check, LogIn } from 'lucide-react'
+import Cookies from 'js-cookie' // 記得引入 js-cookie
 
-// --- 1. 重新定義主題介面與色票 ---
+// --- 1. 定義主題介面與色票 ---
 export interface Theme {
   id: string;
   name: string;
@@ -91,7 +92,6 @@ interface HeaderProps {
   user: UserData | null
   onOpenLogin: () => void
   onLogout: () => void
-  // --- 2. 新增主題相關 Props ---
   currentTheme: Theme
   setTheme: (theme: Theme) => void
 }
@@ -101,14 +101,23 @@ const NAV_ITEMS = ['課程查詢', '預先選課', '討論紀錄']
 export default function Header({ 
   activeTab, setActiveTab, cartCount, onOpenCart, 
   user, onOpenLogin, onLogout,
-  currentTheme, setTheme // 解構新 Props
+  currentTheme, setTheme
 }: HeaderProps) {
   
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
-
-  // 新增：主題選單開關
   const [isThemeOpen, setIsThemeOpen] = useState(false)
+
+  // 1. 初始化：從 Cookies 讀取主題 (只執行一次)
+  useEffect(() => {
+    const savedThemeId = Cookies.get('user_theme_id')
+    if (savedThemeId) {
+      const targetTheme = THEMES.find(t => t.id === savedThemeId)
+      if (targetTheme) {
+        setTheme(targetTheme)
+      }
+    }
+  }, [setTheme]) // 相依性加入 setTheme
 
   // 點擊外部關閉選單
   useEffect(() => {
@@ -123,17 +132,23 @@ export default function Header({
 
   const isAdmin = user?.role === 'admin' || user?.role === 0;
 
+  // 處理主題切換
+  const handleThemeChange = (theme: Theme) => {
+    setTheme(theme) // 更新 State
+    Cookies.set('user_theme_id', theme.id, { expires: 365 }) // 寫入 Cookie，保存 1 年
+    setIsThemeOpen(false) // 關閉選單
+  }
+
   return (
-    // 🔥 Header 本身使用 CSS 變數來設定背景和邊框顏色
     <header className="sticky top-0 z-40 h-[70px] flex items-center justify-between px-6 md:px-10 transition-all backdrop-blur-md bg-[var(--header-bg)] border-b border-[var(--border-color)]">
       
-      {/* Logo 區域 - 使用強調色變數 */}
+      {/* Logo 區域 */}
       <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setActiveTab('課程查詢')}>
         <div className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm shadow-md transition-colors bg-[var(--accent-bg)] text-[var(--accent-text)]">N</div>
         <span className="text-lg font-bold tracking-tight hidden md:block transition-colors text-[var(--main-text)]">國北護課程系統</span>
       </div>
 
-      {/* Nav Tabs - 使用強調色與文字變數 */}
+      {/* Nav Tabs */}
       <nav className="hidden md:flex items-center gap-10 h-full">
         {NAV_ITEMS.map((item) => (
           <button
@@ -144,7 +159,6 @@ export default function Header({
           >
             {item}
             {activeTab === item && (
-              // Active Tab 底線使用強調色
               <span className="absolute bottom-0 left-0 w-full h-[3px] rounded-t-full bg-[var(--accent-bg)]"></span>
             )}
           </button>
@@ -154,11 +168,10 @@ export default function Header({
       {/* Right Actions */}
       <div className="flex items-center gap-3">
         
-        {/* === 3. 自定義顏色按鈕 (新增) === */}
+        {/* === 主題切換按鈕 === */}
         <div className="relative">
           <button 
             onClick={() => setIsThemeOpen(!isThemeOpen)}
-            // 使用 hover 背景變數和次要文字變數
             className="p-2.5 rounded-full transition relative hover:bg-[var(--hover-bg)] text-[var(--sub-text)]"
             title="更換主題顏色"
           >
@@ -169,17 +182,12 @@ export default function Header({
             <>
               <div className="fixed inset-0 z-10" onClick={() => setIsThemeOpen(false)}></div>
               
-              {/* 下拉選單 - 使用卡片背景、邊框和文字變數 */}
               <div className="absolute right-0 top-12 w-48 rounded-2xl shadow-xl p-2 z-20 flex flex-col gap-1 animate-scale-up origin-top-right bg-[var(--card-bg)] border border-[var(--border-color)]">
                 <p className="text-xs font-bold px-3 py-2 text-[var(--sub-text)]">選擇主題風格</p>
                 {THEMES.map((theme) => (
                   <button
                     key={theme.id}
-                    onClick={() => {
-                      setTheme(theme)
-                      setIsThemeOpen(false)
-                    }}
-                    // 選單項目 Hover 和 Active 狀態
+                    onClick={() => handleThemeChange(theme)} // 改用包裝過的函式
                     className={`flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm font-bold transition
                       ${currentTheme.id === theme.id ? 'bg-[var(--hover-bg)] text-[var(--main-text)]' : 'text-[var(--sub-text)] hover:bg-[var(--hover-bg)] hover:text-[var(--main-text)]'}
                     `}
@@ -222,7 +230,6 @@ export default function Header({
             </button>
 
             {isUserMenuOpen && (
-              // User Dropdown - 使用卡片背景變數
               <div className="absolute right-0 top-full mt-2 w-64 rounded-2xl shadow-xl overflow-hidden animate-scale-up z-50 origin-top-right bg-[var(--card-bg)] border border-[var(--border-color)]">
                 <div className="px-6 py-4 border-b border-[var(--border-color)]">
                   <p className="text-xs font-bold mb-1 uppercase tracking-wide text-[var(--sub-text)]">
@@ -259,7 +266,6 @@ export default function Header({
         ) : (
           <button 
             onClick={onOpenLogin}
-            // 登入按鈕使用強調色
             className="hidden sm:flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all shadow-lg active:scale-95 bg-[var(--accent-bg)] text-[var(--accent-text)] hover:opacity-90 shadow-[var(--border-color)]"
           >
             <LogIn className="w-4 h-4" /> 登入

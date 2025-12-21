@@ -189,11 +189,16 @@ export default function AdminEditCourseModal({ course, onClose, onSave }: AdminE
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-500 ml-1">開課系所</label>
                 <select value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-black">
-                  <option value="資訊管理系">資訊管理系</option>
-                  <option value="護理系">護理系</option>
-                  <option value="幼保系">幼保系</option>
-                  <option value="通識中心">通識中心</option>
-                  {/* 可自行補齊 */}
+                    <option value="">請選擇系所...</option> 
+                    <option value="護理系">護理系</option>
+                    <option value="高齡健康照護系">高齡健康照護系</option>
+                    <option value="健康事業管理系">健康事業管理系</option>
+                    <option value="資訊管理系">資訊管理系</option>
+                    <option value="休閒產業與健康促進系">休閒產業與健康促進系</option>
+                    <option value="語言治療與聽力學系">語言治療與聽力學系</option>
+                    <option value="嬰幼兒保育系">嬰幼兒保育系</option>
+                    <option value="運動保健系">運動保健系</option>
+                    <option value="生死與健康心理諮商系">生死與健康心理諮商系</option>
                 </select>
               </div>
               <div className="space-y-1">

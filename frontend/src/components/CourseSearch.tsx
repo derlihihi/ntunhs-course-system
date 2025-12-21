@@ -141,7 +141,7 @@ export default function CourseSearch({ cartItems, onToggleCartItem, onLocationCl
                     onChange={(e) => handleInputChange('semester', e.target.value)}
                     className="w-full appearance-none bg-[var(--hover-bg)] border border-[var(--border-color)] text-[var(--main-text)] py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)] font-medium transition"
                   >
-                    <option value="1141">1142</option>
+                    <option value="1142">1142</option>
                     <option value="1141">1141</option>
                     <option value="1132">1132</option>
                     <option value="1131">1131</option>
@@ -160,13 +160,9 @@ export default function CourseSearch({ cartItems, onToggleCartItem, onLocationCl
                     <option value="">請選擇系所...</option>
                     <option value="護理系">護理系</option>
                     <option value="高齡健康照護系">高齡健康照護系</option>
-                    <option value="護理助產及婦女健康系">護理助產及婦女健康系</option>
-                    <option value="醫護教育暨數位學習系">醫護教育暨數位學習系</option>
-                    <option value="中西醫結合護理研究所">中西醫結合護理研究所</option>
                     <option value="健康事業管理系">健康事業管理系</option>
                     <option value="資訊管理系">資訊管理系</option>
                     <option value="休閒產業與健康促進系">休閒產業與健康促進系</option>
-                    <option value="長期照護系">長期照護系</option>
                     <option value="語言治療與聽力學系">語言治療與聽力學系</option>
                     <option value="嬰幼兒保育系">嬰幼兒保育系</option>
                     <option value="運動保健系">運動保健系</option>
