@@ -141,6 +141,7 @@ export default function CourseSearch({ cartItems, onToggleCartItem, onLocationCl
                     onChange={(e) => handleInputChange('semester', e.target.value)}
                     className="w-full appearance-none bg-[var(--hover-bg)] border border-[var(--border-color)] text-[var(--main-text)] py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:border-[var(--accent-color)] font-medium transition"
                   >
+                    <option value="1141">1142</option>
                     <option value="1141">1141</option>
                     <option value="1132">1132</option>
                     <option value="1131">1131</option>
@@ -179,7 +180,7 @@ export default function CourseSearch({ cartItems, onToggleCartItem, onLocationCl
             <div className="flex items-center gap-4">
               <label className="font-bold min-w-[40px] text-right whitespace-nowrap text-[var(--main-text)]">年級</label>
               <div className="flex flex-wrap gap-x-5 gap-y-3 text-sm font-medium text-[var(--sub-text)]">
-                {['1年級', '2年級', '3年級', '4年級', '5年級', '6年級', '7年級'].map((label) => (
+                {['1年級', '2年級', '3年級', '4年級'].map((label) => (
                   <label key={label} className="flex items-center gap-2 cursor-pointer hover:text-[var(--main-text)] transition">
                     <input 
                       type="checkbox" 

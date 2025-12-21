@@ -116,7 +116,10 @@ export default function AdminEditCourseModal({ course, onClose, onSave }: AdminE
               <div className="space-y-1">
                 <label className="text-xs font-bold text-gray-500 ml-1">必選修</label>
                 <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:ring-2 focus:ring-black">
-                  <option>必修</option><option>選修</option><option>通識</option>
+                  <option>通識必修(通識)</option>
+                  <option>專業必修(系所)</option>
+                  <option>通識選修(通識)</option>
+                  <option>專業選修(系所)</option>
                 </select>
               </div>
             </div>

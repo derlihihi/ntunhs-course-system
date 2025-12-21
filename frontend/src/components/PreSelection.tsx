@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Pin, Eye, EyeOff, Trash2, Download, Lock, Plus, AlertCircle, X, Search, Loader2, Check, ChevronDown } from 'lucide-react'
-import html2canvas from 'html2canvas'
+import Cookies from 'js-cookie'
 import ConfirmModal from './ConfirmModal'
 
 interface Course {
@@ -26,7 +26,6 @@ interface PreSelectionProps {
   onAddCourse: (course: any) => void
 }
 
-// 課程配色邏輯（保留原邏輯，但使用變數調整深色模式下的對比）
 const getCourseColor = (type: string, isConflict: boolean) => {
   if (isConflict) return 'bg-red-100/30 text-red-600 border-red-300/50'
   if (type === '必修') return 'bg-blue-100/30 text-blue-600 border-blue-300/50'
@@ -44,10 +43,59 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
   const [showTimeDetail, setShowTimeDetail] = useState(true)
   const [deleteTarget, setDeleteTarget] = useState<Course | null>(null)
   const [hoverSlot, setHoverSlot] = useState<{day: number, period: number} | null>(null)
+  
+  // 這個狀態控制左側是否顯示「推薦課程」，我們需要將它存入 Cookie
   const [selectedSlot, setSelectedSlot] = useState<{day: number, period: number} | null>(null)
+  
   const [recommendations, setRecommendations] = useState<Course[]>([])
   const [isLoadingRecs, setIsLoadingRecs] = useState(false)
+  
+  // 匯出按鈕 Loading 狀態
+  const [isExporting, setIsExporting] = useState(false)
+  
+  // 初始化標記
+  const [isInitialized, setIsInitialized] = useState(false)
 
+  // 1. 初始化：讀取 Cookies (包含推薦課程的狀態 selectedSlot)
+  useEffect(() => {
+    const savedSemester = Cookies.get('pre_selected_semester')
+    const savedShowWeekend = Cookies.get('pre_show_weekend')
+    const savedShowTimeDetail = Cookies.get('pre_show_time_detail')
+    const savedSelectedSlot = Cookies.get('pre_selected_slot') // 讀取選中的格子
+
+    if (savedSemester) setSelectedSemester(savedSemester)
+    if (savedShowWeekend) setShowWeekend(savedShowWeekend === 'true')
+    if (savedShowTimeDetail) setShowTimeDetail(savedShowTimeDetail === 'true')
+    
+    if (savedSelectedSlot) {
+      try {
+        setSelectedSlot(JSON.parse(savedSelectedSlot))
+      } catch (e) {
+        console.error('Cookie 解析失敗', e)
+        Cookies.remove('pre_selected_slot')
+      }
+    }
+    
+    setIsInitialized(true)
+  }, [])
+
+  // 2. 當狀態改變時：寫入 Cookies
+  useEffect(() => {
+    if (isInitialized) {
+      Cookies.set('pre_selected_semester', selectedSemester, { expires: 7 })
+      Cookies.set('pre_show_weekend', String(showWeekend), { expires: 7 })
+      Cookies.set('pre_show_time_detail', String(showTimeDetail), { expires: 7 })
+      
+      // 如果有選中格子，就存起來；否則移除 Cookie
+      if (selectedSlot) {
+        Cookies.set('pre_selected_slot', JSON.stringify(selectedSlot), { expires: 7 })
+      } else {
+        Cookies.remove('pre_selected_slot')
+      }
+    }
+  }, [selectedSemester, showWeekend, showTimeDetail, selectedSlot, isInitialized])
+
+  // 同步外部傳入的課程
   useEffect(() => {
     setCourses(prev => {
       return initialCourses.map(newCourse => {
@@ -57,6 +105,7 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     })
   }, [initialCourses])
 
+  // 抓取推薦課程 (當 selectedSlot 恢復時，這裡會自動觸發，從而恢復推薦列表)
   useEffect(() => {
     const fetchRecommendations = async () => {
       if (!selectedSlot) return;
@@ -121,6 +170,7 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     )
   }
 
+  // --- 操作邏輯 ---
   const togglePin = (id: string) => {
     setCourses(prev => prev.map(c => c.id === id ? { ...c, isPinned: !c.isPinned } : c))
   }
@@ -147,25 +197,51 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
   const currentSemesterCourses = courses.filter(c => !c.semester || c.semester === selectedSemester);
   const totalVisibleCredits = currentSemesterCourses.filter(c => !c.isHidden).reduce((acc, c) => acc + c.credits, 0)
 
+  // 🔥 修正版圖片匯出函式
   const handleExportImage = async () => {
     if (scheduleRef.current) {
+      setIsExporting(true)
       try {
-        const canvas = await html2canvas(scheduleRef.current, {
-          scale: 3,
+        // 動態載入並處理 default export 問題
+        const module = await import('html2canvas')
+        const html2canvas = module.default || module
+
+        const element = scheduleRef.current
+        
+        const canvas = await html2canvas(element, {
+          scale: 3, // 高解析度
           useCORS: true,
-          backgroundColor: 'var(--card-bg)', // 改用變數，避免深色模式匯出黑底
-          width: scheduleRef.current.scrollWidth,
-          height: scheduleRef.current.scrollHeight
+          backgroundColor: '#ffffff', // 強制白底，避免透明或黑色
+          logging: false,
+          width: element.scrollWidth,
+          height: element.scrollHeight,
+          windowWidth: element.scrollWidth,
+          windowHeight: element.scrollHeight,
+          // 確保字型渲染
+          onclone: (clonedDoc) => {
+            const clonedElement = clonedDoc.getElementById('schedule-export-target')
+            if (clonedElement) {
+              clonedElement.style.fontFamily = 'inherit'
+            }
+          }
         })
+
         const image = canvas.toDataURL("image/png")
         const link = document.createElement('a')
         link.href = image
         link.download = `${user.name}_${selectedSemester}_課表.png`
+        document.body.appendChild(link)
         link.click()
+        document.body.removeChild(link)
+
       } catch (err) {
-        console.error(err)
-        alert('圖片匯出失敗，請稍後再試')
+        console.error('Export Error:', err)
+        alert('圖片匯出失敗，請查看 Console 錯誤訊息')
+      } finally {
+        setIsExporting(false)
       }
+    } else {
+      alert('無法找到課表元件')
     }
   }
 
@@ -204,6 +280,7 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
           <div className="flex-1 bg-[var(--card-bg)] rounded-3xl shadow-sm border border-[var(--border-color)] overflow-hidden flex flex-col transition-all duration-300">
             
             {selectedSlot ? (
+              // 模式 B：智能推薦列表
               <>
                 <div className="p-4 border-b border-[var(--border-color)] bg-blue-100/20 flex justify-between items-center">
                   <div className="flex items-center gap-2">
@@ -257,6 +334,7 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                 </div>
               </>
             ) : (
+              // 模式 A：已選課程列表
               <>
                 <div className="p-4 border-b border-[var(--border-color)] bg-[var(--hover-bg)] flex justify-between items-center">
                   <h3 className="font-bold text-[var(--main-text)]">已選課程 ({sortedCourses.length})</h3>
@@ -304,6 +382,8 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                     onChange={(e) => setSelectedSemester(e.target.value)}
                     className="appearance-none bg-[var(--hover-bg)] border-none font-bold text-[var(--main-text)] py-2 pl-4 pr-10 rounded-xl focus:ring-2 focus:ring-[var(--accent-color)] cursor-pointer"
                   >
+                    <option value="1132">1142 學期</option>
+                    <option value="1132">1141 學期</option>
                     <option value="1132">1132 學期</option>
                     <option value="1131">1131 學期</option>
                   </select>
@@ -316,13 +396,20 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                   <label className="flex items-center gap-2 text-xs font-bold text-[var(--sub-text)] cursor-pointer hover:text-[var(--main-text)] transition"><input type="checkbox" checked={showWeekend} onChange={e => setShowWeekend(e.target.checked)} className="rounded accent-[var(--accent-bg)] cursor-pointer w-4 h-4" />顯示週末</label>
                 </div>
              </div>
-             <button onClick={handleExportImage} className="flex items-center gap-2 bg-[var(--accent-bg)] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:opacity-90 transition active:scale-95"><Download className="w-4 h-4" /> 匯出課表圖片</button>
+             <button 
+               onClick={handleExportImage} 
+               disabled={isExporting}
+               className={`flex items-center gap-2 bg-[var(--accent-bg)] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-md hover:opacity-90 transition active:scale-95 ${isExporting ? 'opacity-50 cursor-wait' : ''}`}
+             >
+               {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+               {isExporting ? '匯出中...' : '匯出課表圖片'}
+             </button>
           </div>
 
           <div className="flex-1 bg-[var(--card-bg)] rounded-3xl shadow-sm border border-[var(--border-color)] p-6 overflow-hidden flex flex-col relative">
             <div className="flex-1 overflow-auto">
-                <div className="w-full min-w-[600px] h-full" ref={scheduleRef}>
-                  <div className="bg-[var(--card-bg)] p-2">
+                <div className="w-full min-w-[600px] h-full" ref={scheduleRef} id="schedule-export-target">
+                  <div className="bg-[var(--card-bg)] p-2 h-full">
                     <div className={`grid gap-1 mb-2`} style={{ gridTemplateColumns: `3rem repeat(${displayDays.length}, 1fr)` }}>
                       <div className="text-center text-xs font-bold text-[var(--sub-text)] py-2">節次</div>
                       {displayDays.map(day => <div key={day} className="text-center font-bold text-[var(--main-text)] text-sm bg-[var(--hover-bg)] rounded-lg py-2">{day}</div>)}

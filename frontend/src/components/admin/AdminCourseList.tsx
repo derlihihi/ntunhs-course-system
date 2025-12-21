@@ -180,6 +180,8 @@ export default function AdminCourseList({ courses, setCourses }: AdminCourseList
                     onChange={(e) => handleInputChange('semester', e.target.value)}
                     className="w-full appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-400 font-medium transition"
                   >
+                    <option value="1142">1142</option>
+                    <option value="1141">1141</option>
                     <option value="1132">1132</option>
                     <option value="1131">1131</option>
                   </select>
@@ -199,16 +201,11 @@ export default function AdminCourseList({ courses, setCourses }: AdminCourseList
                     <option value="高齡健康照護系">高齡健康照護系</option>
                     <option value="護理助產及婦女健康系">護理助產及婦女健康系</option>
                     <option value="醫護教育暨數位學習系">醫護教育暨數位學習系</option>
-                    <option value="中西醫結合護理研究所">中西醫結合護理研究所</option>
-                    <option value="中西醫結合護理研究所(舊)">中西醫結合護理研究所(舊)</option>
-                    <option value="健康科技學院(不分系)">健康科技學院(不分系)</option>
                     <option value="健康事業管理系">健康事業管理系</option>
                     <option value="資訊管理系">資訊管理系</option>
                     <option value="休閒產業與健康促進系">休閒產業與健康促進系</option>
                     <option value="長期照護系">長期照護系</option>
                     <option value="語言治療與聽力學系">語言治療與聽力學系</option>
-                    <option value="國際健康科技碩士學位學程">國際健康科技碩士學位學程</option>
-                    <option value="人類發展與健康學院(不分系)">人類發展與健康學院(不分系)</option>
                     <option value="嬰幼兒保育系">嬰幼兒保育系</option>
                     <option value="運動保健系">運動保健系</option>
                     <option value="生死與健康心理諮商系">生死與健康心理諮商系</option>
