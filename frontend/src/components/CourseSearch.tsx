@@ -17,10 +17,8 @@ interface CourseSearchProps {
 interface SearchFilters {
   semester: string
   department: string
-  systems: string[]
   grades: string[]
   types: string[]
-  categories: string[]
   days: string[]
   periods: string[]
   teacherId: string
@@ -34,10 +32,8 @@ interface SearchFilters {
 const DEFAULT_FILTERS: SearchFilters = {
   semester: '1132', // 建議預設改成跟你的 CSV 資料一致 (1141 或 1132)
   department: '',
-  systems: [],
   grades: [],
   types: [],
-  categories: [],
   days: [],
   periods: [],
   teacherId: '',
@@ -188,22 +184,6 @@ export default function CourseSearch({ cartItems, onToggleCartItem, onLocationCl
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <label className="font-bold text-gray-900 min-w-[40px] text-right whitespace-nowrap">學制</label>
-              <div className="flex flex-wrap gap-x-5 gap-y-3 text-sm font-medium text-gray-600">
-                {['二專', '二技', '二技(三年)', '四技', '碩士班', '博士班', '學士後'].map((label) => (
-                  <label key={label} className="flex items-center gap-2 cursor-pointer hover:text-black transition">
-                    <input 
-                      type="checkbox" 
-                      checked={filters.systems.includes(label)}
-                      onChange={() => handleCheckboxChange('systems', label)}
-                      className="w-4 h-4 rounded border-gray-300 text-black focus:ring-gray-500 accent-black" 
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </div>
 
             <div className="flex items-center gap-4">
               <label className="font-bold text-gray-900 min-w-[40px] text-right whitespace-nowrap">年級</label>
@@ -238,27 +218,6 @@ export default function CourseSearch({ cartItems, onToggleCartItem, onLocationCl
                 ))}
               </div>
             </div>
-
-            <div className="flex items-center gap-4">
-              <label className="font-bold text-gray-900 min-w-[40px] text-right whitespace-nowrap">分類</label>
-              <div className="flex flex-wrap gap-x-5 gap-y-3 text-sm font-medium text-gray-600">
-                {['跨校', '跨域課程', '全英語', 'EMI全英語', '遠距教學', '遠距輔助'].map((label) => (
-                  <label key={label} className="flex items-center gap-2 cursor-pointer hover:text-black transition">
-                    <input 
-                      type="checkbox" 
-                      checked={filters.categories.includes(label)}
-                      onChange={() => handleCheckboxChange('categories', label)}
-                      className="w-4 h-4 rounded border-gray-300 text-black focus:ring-gray-500 accent-black" 
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* 右側欄位 */}
-          <div className="xl:col-span-6 space-y-7 xl:border-l xl:border-gray-100 xl:pl-10">
             <div className="flex items-center gap-4">
               <label className="font-bold text-gray-900 min-w-[40px] text-right whitespace-nowrap">星期</label>
               <div className="flex flex-wrap gap-x-5 gap-y-3 text-sm font-medium text-gray-600">
@@ -275,7 +234,10 @@ export default function CourseSearch({ cartItems, onToggleCartItem, onLocationCl
                 ))}
               </div>
             </div>
+          </div>
 
+          {/* 右側欄位 */}
+          <div className="xl:col-span-6 space-y-7 xl:border-l xl:border-gray-100 xl:pl-10">
             <div className="flex items-start gap-4">
               <label className="font-bold text-gray-900 min-w-[40px] text-right whitespace-nowrap pt-[3px]">節次</label>
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm font-medium text-gray-600 w-full">

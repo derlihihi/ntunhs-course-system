@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Map as MapIcon, X } from 'lucide-react'
-// import Cookies from 'js-cookie' // 如果你還沒用到 Cookie 可以先註解
+// import Cookies from 'js-cookie' 
 
 // 引入拆分後的元件
 import Header from '../components/Header'
@@ -14,7 +14,11 @@ import DiscussionModal from '../components/DiscussionModal'
 import AuthModal from '../components/AuthModal'
 import ConfirmModal from '../components/ConfirmModal'
 
+// 引入管理者介面 (新增)
+import AdminDashboard from '../components/admin/AdminDashboard'
+
 // 定義後端 API 基礎路徑
+// 建議放在 .env.local: NEXT_PUBLIC_API_URL=http://localhost:8000/api
 const API_BASE = 'http://localhost:8000/api';
 
 export default function Home() {
@@ -33,7 +37,7 @@ export default function Home() {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false)
 
   // ============================================
-  // 🔥 API 串接邏輯區
+  // 🔥 API 串接邏輯區 (學生端專用)
   // ============================================
 
   // 1. 讀取購物車 (Fetch Cart)
@@ -51,11 +55,9 @@ export default function Home() {
 
   // 2. 當 User 登入狀態改變時，自動抓取購物車
   useEffect(() => {
-    if (user?.id) {
-      // 如果有登入，去後端抓資料
+    if (user?.id && user.role !== 'admin') { // 只有學生需要抓購物車
       fetchCart(user.id);
     } else {
-      // 沒登入或登出，清空前端清單
       setCartItems([]);
     }
   }, [user]);
@@ -63,14 +65,13 @@ export default function Home() {
 
   // 3. 加入/移除購物車邏輯 (Toggle)
   const toggleCartItem = async (course: any) => {
-    // 檢查是否登入
     if (!user) {
       alert('請先登入才能進行選課！');
       setIsAuthOpen(true);
       return;
     }
 
-    const isExist = cartItems.find(item => item.id == course.id); // 注意: 寬鬆比對 == 避免 string/number 問題
+    const isExist = cartItems.find(item => item.id == course.id); 
 
     try {
       if (isExist) {
@@ -79,7 +80,6 @@ export default function Home() {
           method: 'DELETE'
         });
         if (res.ok) {
-          // 重新抓取最新清單 (確保跟後端一致)
           fetchCart(user.id);
         }
       } else {
@@ -98,11 +98,11 @@ export default function Home() {
       }
     } catch (error) {
       console.error('操作失敗:', error);
-      alert('連線錯誤，請檢查後端 Server');
+      alert('連線錯誤，請檢查後端 Server'); // 如果沒開後端，這裡會跳錯是正常的
     }
   }
 
-  // 4. 單純移除 (Remove) - 給 CartDrawer 和 PreSelection 用
+  // 4. 單純移除 (Remove)
   const removeFromCart = async (courseId: string) => {
     if (!user) return;
 
@@ -111,7 +111,7 @@ export default function Home() {
         method: 'DELETE'
       });
       if (res.ok) {
-        fetchCart(user.id); // 更新畫面
+        fetchCart(user.id); 
       }
     } catch (error) {
       console.error('移除失敗:', error);
@@ -121,21 +121,33 @@ export default function Home() {
   // ============================================
 
   const handleLogoutConfirm = () => {
-    setUser(null) // 清除 User 狀態，useEffect 會自動把 cartItems 清空
+    setUser(null) 
     setIsLogoutModalOpen(false) 
     setActiveTab('課程查詢') 
-    // 這裡也可以順便清除 localStorage
     localStorage.removeItem('user');
   }
 
-  // 嘗試從 localStorage 恢復登入狀態 (選擇性功能)
+  // 嘗試從 localStorage 恢復登入狀態
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+      } catch (e) {
+        console.error('User parse error', e);
+      }
     }
   }, []);
 
+  // =======================================================
+  // 🚀 路由判斷：如果是管理員，直接渲染 AdminDashboard
+  // =======================================================
+  if (user?.role === 'admin') {
+    return <AdminDashboard user={user} onLogout={handleLogoutConfirm} />
+  }
+
+  // --- 以下是原本的學生/訪客視圖 ---
   return (
     <div className="min-h-screen flex flex-col bg-[#F5F5F7] text-gray-900 font-sans selection:bg-black selection:text-white">
       
@@ -199,7 +211,6 @@ export default function Home() {
                 <button onClick={() => setMapLocation(null)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-5 h-5 text-gray-500" /></button>
              </div>
              <div className="w-full h-[400px] bg-gray-100 flex items-center justify-center relative">
-                {/* 這裡之後可以串接 Google Maps API 或顯示靜態圖片 */}
                 <p className="text-gray-400 font-bold">Google Maps 整合位置 ({mapLocation})</p>
              </div>
           </div>
@@ -209,7 +220,7 @@ export default function Home() {
       {selectedDiscussionCourse && (
         <DiscussionModal 
            course={selectedDiscussionCourse} 
-           user={user} // 🔥 加上這行！把登入的使用者資訊傳進去
+           user={user} 
            onClose={() => setSelectedDiscussionCourse(null)} 
         />
       )}
