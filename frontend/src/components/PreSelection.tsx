@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import { Pin, Eye, EyeOff, Trash2, Download, Lock, Plus, AlertCircle, X, Search, Loader2, Check, ChevronDown } from 'lucide-react'
 import Cookies from 'js-cookie'
 import ConfirmModal from './ConfirmModal'
+// 🔥 1. 引入新套件
+import { toPng } from 'html-to-image'
 
 interface Course {
   id: string
@@ -38,7 +40,6 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
   const [courses, setCourses] = useState<Course[]>([])
   const [selectedSemester, setSelectedSemester] = useState('1132')
   
-  // 綁定要截圖的容器 (包含標題和內容)
   const scheduleRef = useRef<HTMLDivElement>(null)
   
   const [showWeekend, setShowWeekend] = useState(false)
@@ -52,7 +53,8 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
   const [isExporting, setIsExporting] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
 
-  // 1. 初始化：讀取 Cookies
+  // ... (useEffect 初始化與 Cookie 讀寫邏輯保持不變，省略以節省篇幅) ...
+  // 請保留原本的 useEffect 程式碼 ...
   useEffect(() => {
     const savedSemester = Cookies.get('pre_selected_semester')
     const savedShowWeekend = Cookies.get('pre_show_weekend')
@@ -75,7 +77,6 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
     setIsInitialized(true)
   }, [])
 
-  // 2. 當狀態改變時：寫入 Cookies
   useEffect(() => {
     if (isInitialized) {
       Cookies.set('pre_selected_semester', selectedSemester, { expires: 7 })
@@ -189,67 +190,41 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
   const currentSemesterCourses = courses.filter(c => !c.semester || c.semester === selectedSemester);
   const totalVisibleCredits = currentSemesterCourses.filter(c => !c.isHidden).reduce((acc, c) => acc + c.credits, 0)
 
-  // 🔥 匯出圖片邏輯修正
+  // 🔥🔥🔥 2. 全新重寫的匯出功能 (使用 html-to-image) 🔥🔥🔥
   const handleExportImage = async () => {
     if (scheduleRef.current) {
       setIsExporting(true)
       try {
-        const module = await import('html2canvas')
-        const html2canvas = module.default || module
-
         const element = scheduleRef.current
         
-        // 取得實際內容寬度 (不含捲軸)
-        const contentWidth = element.scrollWidth
-        const contentHeight = element.scrollHeight
+        // 為了避免捲軸被截進去，我們先把 overflow 設為 visible
+        const originalOverflow = element.style.overflow;
+        element.style.overflow = 'visible';
 
-        const canvas = await html2canvas(element, {
-          scale: 3, // 高解析度
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-          // 強制設定截圖尺寸為內容的實際大小
-          width: contentWidth,
-          height: contentHeight,
-          windowWidth: contentWidth,
-          windowHeight: contentHeight,
-          x: 0,
-          y: 0,
-          // 確保字型渲染與完整內容顯示
-          onclone: (clonedDoc) => {
-            const clonedElement = clonedDoc.getElementById('schedule-export-target')
-            if (clonedElement) {
-              clonedElement.style.fontFamily = 'inherit'
-              // 強制展開所有內容，避免截圖時有捲軸被截到
-              clonedElement.style.overflow = 'visible'
-              clonedElement.style.width = `${contentWidth}px`
-              clonedElement.style.height = `${contentHeight}px`
-              
-              // 移除所有 'truncate' class，讓文字完整顯示 (可能會換行，但至少不會被切掉)
-              const truncatedElements = clonedElement.querySelectorAll('.truncate')
-              truncatedElements.forEach(el => {
-                el.classList.remove('truncate')
-                el.classList.add('break-words') // 改用自動換行
-                // 如果是地點欄位，可能需要加大字體或顯示完整
-                if (el.classList.contains('scale-90')) {
-                    el.classList.remove('scale-90') // 移除縮放，避免模糊
-                }
-              })
+        // 使用 toPng 產生圖片 (它支援 oklab 自動轉換！)
+        const dataUrl = await toPng(element, {
+            backgroundColor: '#ffffff', // 強制白底，避免透明
+            cacheBust: true, // 避免快取問題
+            pixelRatio: 2, // 高解析度
+            style: {
+               fontFamily: 'Arial, sans-serif' // 統一字型
             }
-          }
-        })
+        });
 
-        const image = canvas.toDataURL("image/png")
+        // 復原樣式
+        element.style.overflow = originalOverflow;
+
+        // 下載圖片
         const link = document.createElement('a')
-        link.href = image
         link.download = `${user.name}_${selectedSemester}_課表.png`
+        link.href = dataUrl
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
 
       } catch (err) {
         console.error('Export Error:', err)
-        alert('圖片匯出失敗，請查看 Console 錯誤訊息')
+        alert('圖片匯出失敗，請稍後再試')
       } finally {
         setIsExporting(false)
       }
@@ -306,8 +281,8 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--hover-bg)]/30">
                   {isLoadingRecs ? (
                     <div className="flex flex-col items-center justify-center h-full text-[var(--sub-text)] space-y-2">
-                       <Loader2 className="w-8 h-8 animate-spin" />
-                       <p className="text-xs font-bold">正在搜尋適合的課程...</p>
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p className="text-xs font-bold">正在搜尋適合的課程...</p>
                     </div>
                   ) : recommendations.length > 0 ? (
                     recommendations.map(course => {
@@ -410,49 +385,32 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
           </div>
 
           <div className="flex-1 bg-[var(--card-bg)] rounded-3xl shadow-sm border border-[var(--border-color)] p-6 overflow-hidden flex flex-col relative">
-            
-            {/* 🔥 這裡我們只處理最外層的 overflow */}
             <div className="flex-1 overflow-x-auto overflow-y-auto">
-                {/* 🔥 ID 用於截圖定位
-                   min-width: 確保表格不會因為螢幕小被擠壓
-                */}
                 <div className="w-full min-w-[700px] h-full" ref={scheduleRef} id="schedule-export-target">
                   <div className="bg-[var(--card-bg)] p-2 h-full">
                     
-                    {/* 🔥 修改重點：
-                       將標題 (星期幾) 與內容 (節次與課程) 放在同一個 Grid Container 中，
-                       這樣可以保證對齊永遠準確。
-                    */}
                     <div className="grid gap-1 h-full auto-rows-fr" 
                          style={{ 
-                           // 第一欄是節次，後面跟著星期幾
                            gridTemplateColumns: `3rem repeat(${displayDays.length}, 1fr)`,
-                           // 第一列是標題，後面是 14 節課
                            gridTemplateRows: `auto repeat(14, 1fr)`
                          }}>
 
-                      {/* --- 1. 標題列 (Header Row) --- */}
-                      
-                      {/* 左上角空白格 */}
+                      {/* Header */}
                       <div className="text-center text-xs font-bold text-[var(--sub-text)] py-2 flex items-center justify-center bg-[var(--hover-bg)]/50 rounded-lg">節次</div>
-                      
-                      {/* 星期幾標題 */}
                       {displayDays.map(day => (
                         <div key={day} className="text-center font-bold text-[var(--main-text)] text-sm bg-[var(--hover-bg)] rounded-lg py-2 flex items-center justify-center">
                           {day}
                         </div>
                       ))}
 
-                      {/* --- 2. 內容列 (Content Rows) --- */}
+                      {/* Content */}
                       {Array.from({ length: 14 }, (_, i) => i + 1).map(period => (
                         <>
-                          {/* 節次欄 (第一欄) */}
                           <div key={`p-${period}`} className="flex flex-col items-center justify-center text-xs text-[var(--sub-text)] font-mono border-t border-[var(--border-color)] min-h-[5rem]">
                             <span className="font-bold text-sm text-[var(--main-text)]">{period}</span>
                             {showTimeDetail && <span className="scale-75 opacity-70 mt-1">{timeMap[period]}</span>}
                           </div>
 
-                          {/* 課程格子 (後續欄位) */}
                           {displayDays.map((_, dayIndex) => {
                             const currentDay = dayIndex + 1
                             const activeCourses = currentSemesterCourses.filter(c => {
@@ -485,7 +443,6 @@ export default function PreSelection({ initialCourses, user, onRemoveFromGlobalC
                                     const colorClass = getCourseColor(course.type, isConflict)
                                     return (
                                       <div key={course.id} className={`flex-1 rounded-xl p-1.5 flex flex-col justify-center text-center text-[11px] leading-tight hover:scale-[1.02] hover:shadow-md transition duration-200 border relative overflow-hidden ${colorClass}`} title={`${course.name} (${course.teacher})\n${course.location}`}>
-                                        {/* 🔥 樣式微調：防止文字被截斷 */}
                                         <div className="font-bold w-full mb-0.5 truncate leading-snug">{course.name}</div>
                                         <div className="opacity-90 scale-95 truncate">{course.location}</div>
                                         {isConflict && <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full animate-pulse m-1"></div>}
