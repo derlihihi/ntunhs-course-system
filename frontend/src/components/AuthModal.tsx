@@ -186,7 +186,7 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
                 <IdCard className="w-5 h-5 text-[var(--sub-text)]" />
                 <input 
                   type="text" 
-                  placeholder="例如：11124001" 
+                  placeholder="例如：122214250" 
                   className="bg-transparent outline-none flex-1 text-sm font-medium text-[var(--main-text)] placeholder-[var(--sub-text)]/50"
                   required
                   value={formData.studentId}

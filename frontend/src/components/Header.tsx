@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { ShoppingCart, User, ChevronDown, LogOut, ShieldCheck, Palette, Check, LogIn } from 'lucide-react'
+import Image from 'next/image'
 import Cookies from 'js-cookie' // 記得引入 js-cookie
 
 // --- 1. 定義主題介面與色票 ---
@@ -73,6 +74,55 @@ export const THEMES: Theme[] = [
       colorPreview: '#d4c390'
     }
   },
+  {
+    id: 'pinkcherry',
+    name: '浪漫粉櫻',
+    colors: {
+      appBg: '#f5e8ed',       // 整體背景，柔和粉底
+      headerBg: 'rgba(255,245,250,0.8)', // 標題列半透明
+      cardBg: '#fff0f5',      // 卡片背景
+      mainText: '#8b5e6d',     // 主要文字，深粉灰
+      subText: '#b898a8',      // 次要文字
+      border: '#e8b8c8',       // 邊框與強調
+      accentBg: '#e8b8c8',     // 強調背景（粉金調）
+      accentText: '#ffffff',   // 強調文字（白色對比）
+      hoverBg: '#f8d8e0',      // 懸停背景
+      colorPreview: '#e8b8c8'  // 預覽色
+    }
+  },
+  {
+    id: 'darkelegant',
+    name: '優雅暗夜',
+    colors: {
+      appBg: '#1e1e1e',       // 整體背景，深灰黑
+      headerBg: 'rgba(40,40,40,0.8)', // 標題列半透明
+      cardBg: '#2d2d30',       // 卡片背景
+      mainText: '#e0e0e0',     // 主要文字，亮灰白
+      subText: '#a0a0a0',      // 次要文字
+      border: '#4a5568',       // 邊框，深藍灰
+      accentBg: '#4a5568',     // 強調背景（藍灰調，優雅點綴）
+      accentText: '#ffffff',   // 強調文字
+      hoverBg: '#383838',      // 懸停背景
+      colorPreview: '#4a5568'  // 預覽色
+    }
+  },
+  {
+    id: 'lightmint',
+    name: '清新薄荷綠',
+    colors: {
+      appBg: '#e8f5e9',       // 整體背景，極淺綠底
+      headerBg: 'rgba(245,255,250,0.8)', // 標題列半透明
+      cardBg: '#f1f8e9',       // 卡片背景
+      mainText: '#4a6355',     // 主要文字，深綠灰
+      subText: '#81a18e',      // 次要文字
+      border: '#a5d6a7',       // 邊框與強調（薄荷綠調）
+      accentBg: '#a5d6a7',     // 強調背景
+      accentText: '#ffffff',   // 強調文字（白色對比）
+      hoverBg: '#e0f2e1',      // 懸停背景
+      colorPreview: '#a5d6a7'  // 預覽色
+    }
+  }
+  
 ]
 
 // 定義 User 的介面
@@ -144,7 +194,17 @@ export default function Header({
       
       {/* Logo 區域 */}
       <div className="flex items-center gap-3 cursor-pointer group" onClick={() => setActiveTab('課程查詢')}>
-        <div className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm shadow-md transition-colors bg-[var(--accent-bg)] text-[var(--accent-text)]">N</div>
+        {/* 2. 修改這裡：換成你的 logo.png */}
+        <div className="relative w-9 h-9">
+           <Image 
+             src="/Rilakkuma.png" 
+             alt="Logo" 
+             fill 
+             className="object-contain" 
+             priority
+           />
+        </div>
+
         <span className="text-lg font-bold tracking-tight hidden md:block transition-colors text-[var(--main-text)]">國北護課程系統</span>
       </div>
 
