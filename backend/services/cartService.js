@@ -3,19 +3,20 @@ const CartModel = require('../models/cartModel');
 
 class CartService {
     // 取得清單並格式化
-    static async getUserCart(userId) {
-        const items = await CartModel.getCartItems(userId);
+static async getUserCart(userId) {
+    const items = await CartModel.getCartItems(userId);
 
-        // 格式化資料以符合前端 CartDrawer 的需求
-        return items.map(item => ({
-            id: item.id, // 資料庫的 ID，用來刪除用
-            code: item.course_code, // 顯示用的代碼
-            name: item.name,
-            credits: item.credits,
-            // 組合時間字串： "週一 / 02,03,04"
-            time: `${item.day_of_week?.replace('週', '') || ''} / ${item.period_raw || ''}`
-        }));
-    }
+    return items.map(item => ({
+        id: item.id,
+        code: item.course_code,
+        name: item.name,
+        credits: item.credits,
+        // 組合時間字串
+        time: `${item.day_of_week?.replace('週', '') || ''} / ${item.period_raw || ''}`,
+        location: item.location || '', // 🔥【請補上這行】把 location 傳出去
+        semester: item.semester || ''  // 🔥 建議順便補上學期
+    }));
+}
 
     static async addItem(userId, courseId) {
         return await CartModel.addToCart(userId, courseId);

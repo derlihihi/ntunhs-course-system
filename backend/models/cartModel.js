@@ -35,7 +35,9 @@ class CartModel {
                 c.course_name AS name, 
                 c.credits, 
                 c.day_of_week, 
-                c.period_raw
+                c.period_raw,
+                c.location,
+                c.year_term AS semester
             FROM cart_items ci
             JOIN courses c ON ci.course_id = c.id
             WHERE ci.user_id = $1

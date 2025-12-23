@@ -30,7 +30,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   const [users, setUsers] = useState<any[]>([])
   const [comments, setComments] = useState<any[]>([])
   
-  // 🔥 地圖狀態
+  // 地圖狀態
   const [mapLocation, setMapLocation] = useState<string | null>(null)
 
   // 1. 權限檢查 & 初始化 Cookie
@@ -57,7 +57,6 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
 
   // 3. 從後端抓取所有資料
   useEffect(() => {
-    // 這裡放寬檢查，只要 user 存在就跑 (後端 API 會自己擋權限，或者依賴上方 useEffect 的檢查)
     if (!user) return;
 
     const fetchData = async () => {
@@ -100,7 +99,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
     setActiveTab('課程管理');
   }
 
-  // 權限驗證失敗或載入中
+  // 權限驗證失敗
   if (!user || (user.role !== 'admin' && user.role !== 0 && user.role !== '0')) {
       return null;
   }
@@ -117,7 +116,20 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F5F7] font-sans text-gray-900">
+    // 🔥 修正重點：在這裡注入 CSS 變數，讓共用元件 (如 ConfirmModal) 能讀取到正確顏色
+    <div 
+      className="min-h-screen bg-[#F5F5F7] font-sans text-gray-900"
+      style={{
+        // 定義管理者介面的固定色票 (這裡設為標準的白底黑字風格)
+        '--card-bg': '#ffffff',
+        '--main-text': '#111827',
+        '--sub-text': '#6B7280',
+        '--border-color': '#E5E7EB',
+        '--hover-bg': '#f3f4f6',
+        '--accent-bg': '#000000',
+        '--accent-text': '#ffffff',
+      } as React.CSSProperties}
+    >
       
       <AdminHeader 
         user={user} 
@@ -132,7 +144,6 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
           <AdminCourseList 
               courses={courses} 
               setCourses={setCourses} 
-              // 🔥 這裡使用箭頭函式傳遞，解決型別報錯
               onOpenMap={(location) => setMapLocation(location)}
           />
         )}
@@ -160,7 +171,7 @@ export default function AdminDashboard({ user, onLogout }: AdminDashboardProps) 
         )}
       </main>
 
-      {/* 🔥 地圖彈窗放在最外層 */}
+      {/* 地圖彈窗 */}
       {mapLocation && (
         <MapModal 
           location={mapLocation} 
