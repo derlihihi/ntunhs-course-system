@@ -212,6 +212,8 @@ export default function AdminCourseList({ courses, setCourses, onOpenMap }: Admi
                     onChange={(e) => handleInputChange('semester', e.target.value)}
                     className="w-full appearance-none bg-gray-50 border border-gray-200 text-gray-700 py-2.5 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-400 font-medium transition"
                   >
+                    <option value="1142">1142</option>
+                    <option value="1141">1141</option>
                     <option value="1132">1132</option>
                     <option value="1131">1131</option>
                   </select>

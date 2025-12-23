@@ -348,7 +348,7 @@ export default function CourseSearch({ cartItems, onToggleCartItem, onLocationCl
             <div className="w-12 text-center flex-shrink-0">學分</div>
             <div className="w-28 flex-shrink-0">時間</div>
             <div className="w-20 flex-shrink-0">地點</div>
-            <div className="w-16 text-center flex-shrink-0">討論</div>
+            <div className="w-16 text-center flex-shrink-0">人數</div>
             <div className="w-12 text-center flex-shrink-0">討論</div>
             <div className="w-24 text-right flex-shrink-0">操作</div>
           </div>
