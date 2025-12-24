@@ -283,7 +283,7 @@ export default function AdminEditCourseModal({ course, onClose, onSave }: AdminE
         {showConfirm && (
           <ConfirmModal
             title="確認儲存變更"
-            content="您即將修改此課程的詳細資料。系統會自動將「星期」欄位格式化為「週X」以符合搜尋規則。確定要儲存嗎？"
+            content="您即將修改此課程的詳細資料。。確定要儲存嗎？"
             confirmText="確認修改"
             isDanger={false} 
             onConfirm={executeSave}

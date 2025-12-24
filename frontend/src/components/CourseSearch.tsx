@@ -30,7 +30,7 @@ interface SearchFilters {
 
 // 預設篩選條件
 const DEFAULT_FILTERS: SearchFilters = {
-  semester: '1132',
+  semester: '1141',
   department: '',
   grades: [],
   types: [],
